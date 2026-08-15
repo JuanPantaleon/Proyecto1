@@ -48,3 +48,9 @@ Thumbs.db
 .nx/polygraph
 .nx/self-healing
 .nx/migrate-runs
+vite.config.*.timestamp*
+test-output
+
+# Next.js
+.next
+out
