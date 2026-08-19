@@ -20,5 +20,25 @@
     "eslint.config.js",
     "eslint.config.cjs",
     "eslint.config.mjs"
+  ],
+  "references": [
+    {
+      "path": "src/audit/tsconfig.lib.json"
+    },
+    {
+      "path": "src/health/tsconfig.lib.json"
+    },
+    {
+      "path": "src/training/tsconfig.lib.json"
+    },
+    {
+      "path": "src/catalog/tsconfig.lib.json"
+    },
+    {
+      "path": "src/auth/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/shared/tsconfig.lib.json"
+    }
   ]
 }

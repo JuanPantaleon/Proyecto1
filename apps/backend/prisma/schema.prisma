@@ -23,11 +23,29 @@ enum ExerciseLevel {
   AVANZADO
 }
 
+enum MetricType {
+  REPS_WEIGHT
+  TIME_ONLY
+  REPS_ONLY
+}
+
+enum SetType {
+  NORMAL
+  FAILURE
+  WARMUP
+}
+
 enum Role {
   USER
   TRAINER
   GYM_ADMIN
   SUPER_ADMIN
+}
+
+enum SetValidationStatus {
+  APPROVED
+  REQUIRES_VIDEO
+  REJECTED
 }
 
 model User {
@@ -57,6 +75,7 @@ model Exercise {
   name            String      @unique
   muscleGroup     MuscleGroup @map("muscle_group")
   level           ExerciseLevel @default(PRINCIPIANTE)
+  metricType      MetricType  @default(REPS_WEIGHT) @map("metric_type")
   massValue       Int         @map("mass_value")
   demandValue     Int         @map("demand_value")
   complexityValue Int         @map("complexity_value")
@@ -80,9 +99,34 @@ model Session {
   estimatedCalories Int      @default(0) @map("estimated_calories")
   createdAt         DateTime @default(now()) @map("created_at")
 
+  timerState        TimerState @default(STOPPED) @map("timer_state")
+  timerStartedAt    DateTime? @map("timer_started_at")
+  timerPausedAt     DateTime? @map("timer_paused_at")
+  accumulatedTime   Int       @default(0) @map("accumulated_time")
+
   sets              Set[]
+  restTimers        RestTimer[]
 
   @@map("sessions")
+}
+
+model RestTimer {
+  id           String   @id @default(uuid())
+  sessionId    String   @map("session_id")
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  setId        String?  @map("set_id")
+  startedAt    DateTime @map("started_at")
+  endedAt      DateTime? @map("ended_at")
+  durationSec  Int      @default(0) @map("duration_sec")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("rest_timers")
+}
+
+enum TimerState {
+  RUNNING
+  PAUSED
+  STOPPED
 }
 
 model Set {
@@ -91,12 +135,17 @@ model Set {
   session           Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   exerciseId        String   @map("exercise_id")
   exercise          Exercise @relation(fields: [exerciseId], references: [id])
-  weightKg          Decimal  @db.Decimal(6,2) @map("weight_kg")
-  reps              Int
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id])
+  weightKg          Decimal? @db.Decimal(6,2) @map("weight_kg")
+  reps              Int?
+  durationSec       Int?     @map("duration_sec")
+  setType           SetType  @default(NORMAL) @map("set_type")
   variantBonus      Decimal  @db.Decimal(3,2) @default(1.00) @map("variant_bonus")
   penalty           Decimal  @db.Decimal(3,2) @default(1.00)
   isRecordPr        Boolean  @default(false) @map("is_record_pr")
   isgScore          Decimal  @db.Decimal(8,2) @map("isg_score")
+  validationStatus  SetValidationStatus @default(APPROVED) @map("validation_status")
   createdAt         DateTime @default(now()) @map("created_at")
 
   @@map("sets")

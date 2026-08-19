@@ -29,7 +29,7 @@ node_modules
 /connect.lock
 /coverage
 /libpeerconnection.log
-npm-debug.log
+npm-debug.log*
 yarn-error.log
 testem.log
 /typings
@@ -54,3 +54,13 @@ test-output
 # Next.js
 .next
 out
+
+# Logs y artefactos locales
+*.log
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+apps/web-admin/.env
+apps/backend/.env

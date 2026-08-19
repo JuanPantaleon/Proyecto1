@@ -66,13 +66,15 @@
   "workspaces": [
     "packages/*",
     "my-app",
-    "apps/*"
+    "apps/*",
+    "apps/backend/src/*"
   ],
   "dependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "axios": "^1.6.0",
+    "lucide-react": "^1.32.0",
     "next": "~16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

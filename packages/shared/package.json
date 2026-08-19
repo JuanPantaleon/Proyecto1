@@ -21,6 +21,8 @@
     "name": "shared"
   },
   "dependencies": {
-    "tslib": "^2.3.0"
+    "decimal.js": "^10.6.0",
+    "tslib": "^2.3.0",
+    "zod": "^4.4.3"
   }
 }
