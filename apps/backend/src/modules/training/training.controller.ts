@@ -22,20 +22,23 @@ export class TrainingController {
 
   @Put('sesion/:id/finalizar')
   @ApiOperation({ summary: 'Finalizar sesión de entrenamiento' })
-  async endSession(@Param('id') id: string) {
-    return this.trainingService.endSession(id);
+  async endSession(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.endSession(id, user.id);
   }
 
   @Post('set')
   @ApiOperation({ summary: 'Registrar una serie (calcula ISG automáticamente)' })
-  async createSet(@Body(new ZodValidationPipe(createSetSchema)) data: CreateSetDto) {
-    return this.trainingService.createSet(data);
+  async createSet(
+    @CurrentUser() user: any,
+    @Body(new ZodValidationPipe(createSetSchema)) data: CreateSetDto,
+  ) {
+    return this.trainingService.createSet(user.id, data);
   }
 
   @Get('sesion/:id')
   @ApiOperation({ summary: 'Obtener detalles de una sesión' })
-  async getSession(@Param('id') id: string) {
-    return this.trainingService.getSession(id);
+  async getSession(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.getSession(id, user.id);
   }
 
   @Get('mis-sesiones')
@@ -52,49 +55,53 @@ export class TrainingController {
 
   @Post('sesion/:id/timer/iniciar')
   @ApiOperation({ summary: 'Iniciar/reanudar timer de la sesión' })
-  async startTimer(@Param('id') id: string) {
-    return this.trainingService.startTimer(id);
+  async startTimer(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.startTimer(id, user.id);
   }
 
   @Put('sesion/:id/timer/pausar')
   @ApiOperation({ summary: 'Pausar timer de la sesión' })
-  async pauseTimer(@Param('id') id: string) {
-    return this.trainingService.pauseTimer(id);
+  async pauseTimer(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.pauseTimer(id, user.id);
   }
 
   @Put('sesion/:id/timer/reanudar')
   @ApiOperation({ summary: 'Reanudar timer de la sesión' })
-  async resumeTimer(@Param('id') id: string) {
-    return this.trainingService.resumeTimer(id);
+  async resumeTimer(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.resumeTimer(id, user.id);
   }
 
   @Put('sesion/:id/timer/detener')
   @ApiOperation({ summary: 'Detener timer de la sesión' })
-  async stopTimer(@Param('id') id: string) {
-    return this.trainingService.stopTimer(id);
+  async stopTimer(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.stopTimer(id, user.id);
   }
 
   @Get('sesion/:id/timer')
   @ApiOperation({ summary: 'Obtener estado actual del timer' })
-  async getTimerState(@Param('id') id: string) {
-    return this.trainingService.getTimerState(id);
+  async getTimerState(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.getTimerState(id, user.id);
   }
 
   @Post('sesion/:id/descanso/iniciar')
   @ApiOperation({ summary: 'Iniciar timer de descanso' })
-  async startRestTimer(@Param('id') id: string, @Body('setId') setId?: string) {
-    return this.trainingService.startRestTimer(id, setId);
+  async startRestTimer(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body('setId') setId?: string,
+  ) {
+    return this.trainingService.startRestTimer(id, setId, user.id);
   }
 
   @Put('sesion/:id/descanso/finalizar')
   @ApiOperation({ summary: 'Finalizar timer de descanso' })
-  async endRestTimer(@Param('id') id: string) {
-    return this.trainingService.endRestTimer(id);
+  async endRestTimer(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.endRestTimer(id, user.id);
   }
 
   @Get('sesion/:id/descansos')
   @ApiOperation({ summary: 'Obtener historial de descansos' })
-  async getRestTimers(@Param('id') id: string) {
-    return this.trainingService.getRestTimers(id);
+  async getRestTimers(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.trainingService.getRestTimers(id, user.id);
   }
 }

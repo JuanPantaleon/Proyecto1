@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Play, Check, X, Plus, Dumbbell, Timer, Flame, SkipForward, QrCode, ShieldCheck, Zap, ShieldAlert, Video } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Play, Check, X, Plus, Dumbbell, Timer, Flame, QrCode, ShieldCheck, Zap, ShieldAlert, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SessionQR } from '@/components/dashboard/session-qr';
 import { resolveLiftKind, validateLiftRatio, estimateOneRepMax, REQUIRES_VIDEO_LABEL } from '@ranked-fitness/shared';
@@ -11,7 +12,6 @@ import { useRole } from '@/lib/roles';
 const STORAGE_KEY = 'ranked_fitness_custom_routines';
 const SESSION_KEY = 'ranked_fitness_session';
 const MODE_KEY = 'ranked_fitness_session_mode';
-const TIEMPO_EJERCICIO = 40;
 
 type SetStatus = 'pending' | 'done' | 'failed';
 type SessionMode = 'casual' | 'competitivo';
@@ -37,19 +37,13 @@ interface SessionDay {
   exercises: SessionExercise[];
 }
 
-type View = 'session' | 'timer' | 'modo';
+type View = 'session' | 'modo';
 
 const calcIsg = (coefficient: number, kilos: string, repes: string) => {
   const k = parseFloat(kilos);
   const r = parseFloat(repes);
   if (!k || !r) return 0;
   return Math.round((k * r * coefficient) / 10);
-};
-
-const formatTime = (seconds: number) => {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
 const STATUS_CLASS: Record<SetStatus, string> = {
@@ -63,18 +57,12 @@ export default function SesionEnCursoPage() {
   const [mode, setMode] = useState<SessionMode | null>(null);
   const [sessionDay, setSessionDay] = useState<SessionDay | null>(null);
   const [empty, setEmpty] = useState(false);
-  const [activeExerciseId, setActiveExerciseId] = useState<number | null>(null);
   const [validationExerciseId, setValidationExerciseId] = useState<number | null>(null);
   const [qrExercise, setQrExercise] = useState<{ exercise: SessionExercise; isg: number } | null>(null);
-  const [timer, setTimer] = useState<{
-    phase: 'ejercicio' | 'descanso';
-    remaining: number;
-    setIndex: number;
-  }>({ phase: 'ejercicio', remaining: TIEMPO_EJERCICIO, setIndex: 0 });
-  const [timerRunning, setTimerRunning] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [antiCheat, setAntiCheat] = useState<{ exerciseId: number; message: string } | null>(null);
 
+  const router = useRouter();
   const { profile } = useRole();
   const playerWeightKg = 'role' in profile && profile.role === 'player' ? profile.weightKg : 0;
 
@@ -177,18 +165,14 @@ export default function SesionEnCursoPage() {
   };
 
   const startExercise = (exercise: SessionExercise) => {
-    setActiveExerciseId(exercise.id);
-    setTimer({ phase: 'ejercicio', remaining: TIEMPO_EJERCICIO, setIndex: 0 });
-    setTimerRunning(true);
-    setView('timer');
-  };
-
-  const finishExercise = () => {
-    setTimerRunning(false);
-    setView('session');
-    if (activeExerciseId !== null) {
-      setValidationExerciseId(activeExerciseId);
-    }
+    const params = new URLSearchParams({
+      modo: 'ejercicio',
+      exKey: `legacy-${exercise.id}`,
+      nombre: exercise.name,
+      metricType: 'REPS_WEIGHT',
+      segundos: '40',
+    });
+    router.push(`/dashboard/temporizador?${params.toString()}`);
   };
 
   const confirmExercise = (answer: 'done' | 'failed') => {
@@ -213,7 +197,6 @@ export default function SesionEnCursoPage() {
         });
         if (result.status === 'blocked') {
           setValidationExerciseId(null);
-          setActiveExerciseId(null);
           setAntiCheat({ exerciseId: exercise.id, message: result.message });
           return;
         }
@@ -234,7 +217,6 @@ export default function SesionEnCursoPage() {
         : prev
     );
     setValidationExerciseId(null);
-    setActiveExerciseId(null);
     if (answer === 'done') {
       const isg = exercise.sets.reduce(
         (sum, set) => sum + calcIsg(exercise.coefficient, set.kilos, set.repes),
@@ -243,37 +225,6 @@ export default function SesionEnCursoPage() {
       setQrExercise({ exercise: { ...exercise, requiresVideo }, isg });
     }
   };
-
-  useEffect(() => {
-    if (view !== 'timer' || !timerRunning || activeExerciseId === null) return;
-    const exercise = sessionDay?.exercises.find((e) => e.id === activeExerciseId);
-    const setsCount = Math.max(1, exercise?.sets.length ?? 1);
-    const restSeconds = exercise?.restSeconds ?? 90;
-
-    const id = setInterval(() => {
-      setTimer((prev) => {
-        if (prev.remaining > 1) return { ...prev, remaining: prev.remaining - 1 };
-
-        if (prev.phase === 'ejercicio') {
-          if (prev.setIndex + 1 < setsCount) {
-            return { phase: 'descanso', remaining: restSeconds, setIndex: prev.setIndex };
-          }
-          return prev;
-        }
-        return { phase: 'ejercicio', remaining: TIEMPO_EJERCICIO, setIndex: prev.setIndex + 1 };
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [view, timerRunning, activeExerciseId, sessionDay]);
-
-  useEffect(() => {
-    if (view !== 'timer' || activeExerciseId === null) return;
-    const exercise = sessionDay?.exercises.find((e) => e.id === activeExerciseId);
-    const setsCount = Math.max(1, exercise?.sets.length ?? 1);
-    if (timer.phase === 'ejercicio' && timer.remaining === 0 && timer.setIndex + 1 >= setsCount) {
-      finishExercise();
-    }
-  }, [timer, view, activeExerciseId, sessionDay]);
 
   const totalIsg =
     activeDay?.exercises.reduce(
@@ -360,47 +311,6 @@ export default function SesionEnCursoPage() {
               </p>
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (view === 'timer') {
-    const exercise = sessionDay?.exercises.find((e) => e.id === activeExerciseId);
-    const setsCount = Math.max(1, exercise?.sets.length ?? 1);
-    const isEjercicio = timer.phase === 'ejercicio';
-    const color = isEjercicio ? '#EF4444' : '#FBBF24';
-    const total = isEjercicio ? TIEMPO_EJERCICIO : (exercise?.restSeconds ?? 90);
-    const progress = total > 0 ? (total - timer.remaining) / total : 0;
-
-    return (
-      <div className="flex h-[100dvh] min-h-0 flex-col bg-black text-white overflow-hidden">
-        <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6">
-          <div className="text-center">
-            <p className="text-sm font-bold uppercase tracking-widest text-white/40">
-              {exercise?.name}
-            </p>
-            <p className="mt-2 text-xs font-bold uppercase tracking-widest" style={{ color: `${color}CC` }}>
-              Serie {Math.min(timer.setIndex + 1, setsCount)} de {setsCount} · {isEjercicio ? 'Ejercicio' : 'Descanso'}
-            </p>
-            <p className="mt-3 text-8xl font-black tracking-tighter tabular-nums" style={{ color }}>
-              {formatTime(timer.remaining)}
-            </p>
-            <div className="mx-auto mt-6 h-1.5 w-64 overflow-hidden rounded-full bg-white/5">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${progress * 100}%`, backgroundColor: color }}
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={finishExercise}
-            className="flex items-center gap-2 rounded-full border border-white/10 bg-[#0D0D0D] px-6 py-3 text-sm font-bold uppercase tracking-widest text-white/50 transition-all hover:text-white"
-          >
-            <SkipForward className="h-4 w-4" />
-            Saltar
-          </button>
         </div>
       </div>
     );

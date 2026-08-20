@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { calculateExerciseFactor } from '@ranked-fitness/shared';
+import { MuscleGroup, ExerciseLevel } from '@prisma/client';
+import { calculateExerciseFactor, type MetricType } from '@ranked-fitness/shared';
 
 @Injectable()
 export class CatalogService {
@@ -46,8 +47,52 @@ export class CatalogService {
     return this.prisma.exercise.create({
       data: {
         ...data,
+        muscleGroup: data.muscleGroup as MuscleGroup,
+        level: data.level as ExerciseLevel,
         exerciseFactor,
       },
+    });
+  }
+
+  async createCustom(
+    data: {
+      name: string;
+      description?: string;
+      metricType: MetricType;
+      defaultSets?: number;
+      defaultReps?: number;
+      defaultWeight?: number;
+      defaultSec?: number;
+      exerciseFactor?: number;
+    },
+    createdById: string,
+  ) {
+    return this.prisma.exercise.create({
+      data: {
+        name: data.name,
+        description: data.description ?? null,
+        muscleGroup: 'OTROS',
+        level: 'PRINCIPIANTE',
+        metricType: data.metricType,
+        massValue: null,
+        demandValue: null,
+        complexityValue: null,
+        impactValue: null,
+        exerciseFactor: data.exerciseFactor ?? 1.0,
+        isCustom: true,
+        defaultSets: data.defaultSets ?? null,
+        defaultReps: data.defaultReps ?? null,
+        defaultWeight: data.defaultWeight ?? null,
+        defaultSec: data.defaultSec ?? null,
+        createdById,
+      },
+    });
+  }
+
+  async findCustomByUser(userId: string) {
+    return this.prisma.exercise.findMany({
+      where: { isCustom: true, createdById: userId, isActive: true },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -65,13 +110,13 @@ export class CatalogService {
 
     const updateData: any = { ...data };
     
-    if (data.massValue !== undefined || data.demandValue !== undefined || 
+if (data.massValue !== undefined || data.demandValue !== undefined ||
         data.complexityValue !== undefined || data.impactValue !== undefined) {
       const current = await this.prisma.exercise.findUnique({ where: { id } });
-      const massValue = data.massValue ?? current!.massValue;
-      const demandValue = data.demandValue ?? current!.demandValue;
-      const complexityValue = data.complexityValue ?? current!.complexityValue;
-      const impactValue = data.impactValue ?? current!.impactValue;
+      const massValue = data.massValue ?? current!.massValue ?? 0;
+      const demandValue = data.demandValue ?? current!.demandValue ?? 0;
+      const complexityValue = data.complexityValue ?? current!.complexityValue ?? 0;
+      const impactValue = data.impactValue ?? current!.impactValue ?? 0;
       
       updateData.exerciseFactor = calculateExerciseFactor(massValue, demandValue, complexityValue, impactValue);
     }

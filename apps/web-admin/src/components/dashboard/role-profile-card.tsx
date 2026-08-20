@@ -299,10 +299,47 @@ function CoachCard() {
   );
 }
 
+function AdminCard() {
+  const { profile } = useRole();
+  const admin = profile as import('@/lib/roles').AdminProfile;
+
+  return (
+    <div className="rounded-[2rem] border border-[#FBBF24]/20 bg-gradient-to-r from-[#0D0D0D] to-[#1a1a1a] p-6 shadow-2xl">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border-2 border-[#FBBF24]/60 bg-[#FBBF24]/15 text-xl font-black text-[#FBBF24]">
+            👑
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-white/40">
+              Owner · Super Admin
+            </p>
+            <p className="mt-0.5 break-words text-lg font-bold text-white">{admin.name}</p>
+            <p className="mt-1 text-xs text-[#FBBF24]/80">{admin.label}</p>
+          </div>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/5 px-4 py-2">
+            <span className="text-lg font-black text-[#FBBF24]">∞</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">
+              Permisos
+            </span>
+          </div>
+        </div>
+      </div>
+      <p className="mt-5 rounded-2xl border border-white/5 bg-white/5 p-4 text-sm text-white/50">
+        Acceso raíz con vistas globales: usá la mini-isla 👑 superior para alternar entre las
+        vistas de Jugador, Entrenador, Gimnasio y Administración sin perder permisos.
+      </p>
+    </div>
+  );
+}
+
 export default function RoleProfileCard() {
   const { role } = useRole();
 
   if (role === 'gym') return <GymCard />;
   if (role === 'coach') return <CoachCard />;
+  if (role === 'admin') return <AdminCard />;
   return <PlayerCard />;
 }

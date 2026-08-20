@@ -9,6 +9,9 @@ export default defineConfig({
     path: "prisma/migrations",
     seed: "tsx ./prisma/seed.ts",
   },
+  // Prisma 7: la URL de la base (PostgreSQL estándar) se resuelve SIEMPRE desde
+  // la variable de entorno DATABASE_URL (Supabase/Render). Sin esto, Migrate
+  // no puede conectarse a la base remota.
   datasource: {
     url: process.env["DATABASE_URL"],
   },

@@ -51,6 +51,7 @@ interface Exercise {
   name: string;
   coefficient: number;
   restSeconds: number;
+  workSeconds: number;
   sets: Set[];
 }
 
@@ -61,12 +62,14 @@ interface Day {
 }
 
 const REST_OPTIONS = [30, 45, 60, 90, 120, 150, 180];
+const WORK_OPTIONS = [20, 30, 45, 60, 90, 120];
 
 const newExercise = (): Exercise => ({
   id: Date.now() + Math.floor(Math.random() * 1000),
   name: 'Nuevo Ejercicio',
   coefficient: 1.0,
   restSeconds: 90,
+  workSeconds: 45,
   sets: [{ kilos: '', repes: '', done: false }],
 });
 
@@ -80,6 +83,7 @@ const initialDays: Day[] = [
         name: 'Press de Banca',
         coefficient: 1.0,
         restSeconds: 90,
+        workSeconds: 45,
         sets: [
           { kilos: '60', repes: '12', done: true },
           { kilos: '70', repes: '10', done: true },
@@ -129,6 +133,7 @@ export default function CrearRutinaPage() {
             name: e.name,
             coefficient: 1.0,
             restSeconds: e.restSeconds ?? 90,
+            workSeconds: e.workSeconds ?? 45,
             sets: e.sets.map((s) => ({ kilos: s.kilos, repes: s.repes, done: false })),
           })),
         }));
@@ -270,6 +275,16 @@ export default function CrearRutinaPage() {
     );
   };
 
+  const updateWorkSeconds = (dayId: number, exerciseId: number, value: number) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        d.id === dayId
+          ? { ...d, exercises: d.exercises.map((e) => (e.id === exerciseId ? { ...e, workSeconds: value } : e)) }
+          : d
+      )
+    );
+  };
+
   const openSelector = (exerciseId: number) => {
     setTargetExerciseId(exerciseId);
     setSearchTerm('');
@@ -325,6 +340,7 @@ export default function CrearRutinaPage() {
         exercises: day.exercises.map((exercise) => ({
           name: exercise.name,
           restSeconds: exercise.restSeconds,
+          workSeconds: exercise.workSeconds,
           sets: exercise.sets.map((set) => ({ kilos: set.kilos, repes: set.repes })),
         })),
       })),
@@ -516,23 +532,42 @@ export default function CrearRutinaPage() {
                         Seleccionar Ejercicio
                       </button>
 
-                      {/* Descanso entre series */}
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                          Descanso entre series
-                        </span>
-                        <select
-                          value={exercise.restSeconds}
-                          onChange={(e) => updateRestSeconds(activeDay.id, exercise.id, Number(e.target.value))}
-                          className="cursor-pointer appearance-none rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-center text-sm font-bold text-[#FBBF24] outline-none transition-colors focus:border-[#EF4444]"
-                          aria-label="Tiempo de descanso"
-                        >
-                          {REST_OPTIONS.map((secs) => (
-                            <option key={secs} value={secs}>
-                              {secs}s
-                            </option>
-                          ))}
-                        </select>
+                      {/* Tiempos de trabajo y descanso (a nivel del ejercicio) */}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#EF4444]/20 bg-[#EF4444]/5 px-4 py-3">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-[#EF4444]">
+                            Tiempo de trabajo
+                          </span>
+                          <select
+                            value={exercise.workSeconds}
+                            onChange={(e) => updateWorkSeconds(activeDay.id, exercise.id, Number(e.target.value))}
+                            className="cursor-pointer appearance-none rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-center text-sm font-bold text-[#EF4444] outline-none transition-colors focus:border-[#EF4444]"
+                            aria-label="Tiempo de trabajo"
+                          >
+                            {WORK_OPTIONS.map((secs) => (
+                              <option key={secs} value={secs}>
+                                {secs}s
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                            Descanso entre series
+                          </span>
+                          <select
+                            value={exercise.restSeconds}
+                            onChange={(e) => updateRestSeconds(activeDay.id, exercise.id, Number(e.target.value))}
+                            className="cursor-pointer appearance-none rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-center text-sm font-bold text-[#FBBF24] outline-none transition-colors focus:border-[#EF4444]"
+                            aria-label="Tiempo de descanso"
+                          >
+                            {REST_OPTIONS.map((secs) => (
+                              <option key={secs} value={secs}>
+                                {secs}s
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       {/* Tabla de series */}

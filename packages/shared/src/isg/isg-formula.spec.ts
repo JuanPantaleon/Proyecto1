@@ -251,6 +251,98 @@ describe('calculateISG - series al fallo (FAILURE)', () => {
   });
 });
 
+describe('calculateISG - métrica TO_FAILURE (registro flexible)', () => {
+  it('calcula por reps (modo calisténico) cuando se informan reps', () => {
+    const repsFailure = calculateISG({
+      metricType: 'TO_FAILURE',
+      reps: 12,
+      exerciseFactor: 5.5,
+      bodyWeightKg: 80,
+      heightCm: 175,
+      variantBonus: 1.0,
+      penalty: 1.0,
+      setType: 'FAILURE',
+    });
+    const calisthenic = calculateISG({
+      metricType: 'REPS_ONLY',
+      reps: 12,
+      exerciseFactor: 5.5,
+      bodyWeightKg: 80,
+      heightCm: 175,
+      variantBonus: 1.0,
+      penalty: 1.0,
+      setType: 'FAILURE',
+    });
+
+    expect(repsFailure.finalScore).toBe(calisthenic.finalScore);
+  });
+
+  it('calcula por segundos (modo isométrico) cuando se informa duración', () => {
+    const timeFailure = calculateISG({
+      metricType: 'TO_FAILURE',
+      durationSec: 45,
+      exerciseFactor: 4.75,
+      bodyWeightKg: 80,
+      heightCm: 175,
+      variantBonus: 1.0,
+      penalty: 1.0,
+      setType: 'FAILURE',
+    });
+    const isometric = calculateISG({
+      metricType: 'TIME_ONLY',
+      durationSec: 45,
+      exerciseFactor: 4.75,
+      bodyWeightKg: 80,
+      heightCm: 175,
+      variantBonus: 1.0,
+      penalty: 1.0,
+      setType: 'FAILURE',
+    });
+
+    expect(timeFailure.finalScore).toBe(isometric.finalScore);
+  });
+
+  it('prioriza reps cuando se informan ambas medidas', () => {
+    const both = calculateISG({
+      metricType: 'TO_FAILURE',
+      reps: 10,
+      durationSec: 45,
+      exerciseFactor: 5.5,
+      bodyWeightKg: 80,
+      heightCm: 175,
+      variantBonus: 1.0,
+      penalty: 1.0,
+      setType: 'FAILURE',
+    });
+    expect(both.finalScore).toBe(
+      calculateISG({
+        metricType: 'REPS_ONLY',
+        reps: 10,
+        exerciseFactor: 5.5,
+        bodyWeightKg: 80,
+        heightCm: 175,
+        variantBonus: 1.0,
+        penalty: 1.0,
+        setType: 'FAILURE',
+      }).finalScore
+    );
+  });
+
+  it('rechaza series al fallo sin reps ni duración', () => {
+    expect(() =>
+      calculateISG({
+        metricType: 'TO_FAILURE',
+        exerciseFactor: 5.5,
+        bodyWeightKg: 80,
+        heightCm: 175,
+        variantBonus: 1.0,
+        penalty: 1.0,
+        setType: 'FAILURE',
+      })
+    ).toThrow('Se requiere reps o durationSec');
+  });
+});
+
 describe('calculateExerciseFactor', () => {
   it('promedia masa, demanda, complejidad e impacto', () => {
     expect(calculateExerciseFactor(9, 8, 7, 8)).toBe(8);
@@ -260,7 +352,12 @@ describe('calculateExerciseFactor', () => {
 
 describe('enums de métricas y tipos de serie', () => {
   it('expone las métricas de ejercicio soportadas', () => {
-    expect(METRIC_TYPES).toEqual(['REPS_WEIGHT', 'TIME_ONLY', 'REPS_ONLY']);
+    expect(METRIC_TYPES).toEqual([
+      'REPS_WEIGHT',
+      'TIME_ONLY',
+      'REPS_ONLY',
+      'TO_FAILURE',
+    ]);
   });
 
   it('expone los tipos de serie soportados', () => {

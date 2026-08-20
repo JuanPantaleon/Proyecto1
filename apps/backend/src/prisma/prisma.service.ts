@@ -21,12 +21,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     if (process.env.NODE_ENV === 'production') return;
     
     const models = Reflect.ownKeys(this).filter(
-      (key) => typeof key === 'string' && !key.startsWith('_') && !key.startsWith('$'),
+      (key): key is string =>
+        typeof key === 'string' && !key.startsWith('_') && !key.startsWith('$'),
     );
     
     for (const model of models) {
-      if (typeof this[model]?.deleteMany === 'function') {
-        await this[model].deleteMany();
+      const delegate = (this as unknown as Record<string, any>)[model];
+      if (typeof delegate?.deleteMany === 'function') {
+        await delegate.deleteMany();
       }
     }
   }

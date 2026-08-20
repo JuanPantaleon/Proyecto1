@@ -39,6 +39,7 @@ const ROLE_SUBTITLE: Record<string, string> = {
   player: 'Centro de control del atleta',
   gym: 'Panel de gestión del gimnasio',
   coach: 'Gestión de alumnos y programas',
+  admin: 'Panel de administración raíz',
 };
 
 export default function DashboardPage() {

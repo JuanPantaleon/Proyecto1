@@ -26,7 +26,17 @@ export interface ISGRepsOnlyInput extends ISGBaseInput {
   reps: number;
 }
 
-export type ISGInput = ISGRepsWeightInput | ISGTimeOnlyInput | ISGRepsOnlyInput;
+export interface ISGToFailureInput extends ISGBaseInput {
+  metricType: 'TO_FAILURE';
+  reps?: number;
+  durationSec?: number;
+}
+
+export type ISGInput =
+  | ISGRepsWeightInput
+  | ISGTimeOnlyInput
+  | ISGRepsOnlyInput
+  | ISGToFailureInput;
 
 export interface ISGResult {
   rawScore: number;
@@ -102,6 +112,34 @@ export function calculateISG(input: ISGInput): ISGResult {
         .times(reps)
         .times(exerciseFactor)
         .dividedBy(bodyWeightKg);
+      break;
+    }
+    case 'TO_FAILURE': {
+      const { reps, durationSec } = input;
+      const hasDuration = (durationSec ?? 0) > 0;
+      const hasReps = (reps ?? 0) > 0;
+      if (!hasDuration && !hasReps) {
+        throw new Error('Se requiere reps o durationSec para series al fallo');
+      }
+      if (hasDuration && !hasReps) {
+        validateDurationSec(durationSec!);
+        const isometricLoadKg = new Decimal(bodyWeightKg).times(
+          ISG_CONSTANTS.ISOMETRIC_BODY_LOAD_RATIO
+        );
+        ratioFuerza = isometricLoadKg
+          .times(durationSec!)
+          .times(exerciseFactor)
+          .dividedBy(bodyWeightKg);
+      } else {
+        validateReps(reps!);
+        const calisthenicLoadKg = new Decimal(bodyWeightKg).times(
+          ISG_CONSTANTS.CALISTHENIC_BODY_LOAD_RATIO
+        );
+        ratioFuerza = calisthenicLoadKg
+          .times(reps!)
+          .times(exerciseFactor)
+          .dividedBy(bodyWeightKg);
+      }
       break;
     }
   }

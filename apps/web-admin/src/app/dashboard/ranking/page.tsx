@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Trophy, Medal, Globe, MapPin, Building2, Crown, ChevronDown, ShieldCheck, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { athletes, initials, type Athlete } from '@/lib/athletes';
+import { useRole } from '@/lib/roles';
 
 type Scope = 'global' | 'pais' | 'provincia' | 'gimnasio';
 type RankKind = 'competitivo' | 'casual';
@@ -66,14 +67,28 @@ const rankKinds: { key: RankKind; label: string; hint: string; icon: React.Compo
 ];
 
 export default function RankingPage() {
+  const { players } = useRole();
   const [kind, setKind] = useState<RankKind>('competitivo');
   const [scope, setScope] = useState<Scope>('global');
   const [country, setCountry] = useState('Argentina');
   const [province, setProvince] = useState('Jujuy');
   const [gym, setGym] = useState('Pantafit');
 
-  const list = kind === 'competitivo' ? athletes : casualAthletes;
-  const userIsg = kind === 'competitivo' ? 2450 : 2710;
+  const playerMe = players.find((p) => p.id === 'player-1');
+  const liveCurrentUser = {
+    name: playerMe?.name ?? currentUser.name,
+    division: (playerMe?.division ?? currentUser.division) as Athlete['division'],
+    isg: playerMe?.isgScore ?? currentUser.isg,
+  };
+  const liveAthletes: Athlete[] = athletes.map((a) => {
+    const roster = players.find((p) => p.name === a.name);
+    return roster
+      ? { ...a, isg: roster.isgScore, division: roster.division as Athlete['division'] }
+      : a;
+  });
+
+  const list = kind === 'competitivo' ? liveAthletes : casualAthletes;
+  const userIsg = kind === 'competitivo' ? liveCurrentUser.isg : liveCurrentUser.isg + 260;
 
   const activeCountry = countries.find((c) => c.name === country) ?? countries[0];
 
@@ -170,18 +185,18 @@ export default function RankingPage() {
         <div className="flex items-center justify-between gap-4 rounded-[2rem] border border-white/10 bg-gradient-to-r from-[#0D0D0D] to-[#1a1a1a] p-6 shadow-2xl">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border-2 border-[#FBBF24]/60 bg-[#FBBF24]/15 text-lg font-black text-[#FBBF24]">
-              {initials(currentUser.name)}
+              {initials(liveCurrentUser.name)}
             </div>
             <div className="min-w-0">
-              <p className="break-words text-base font-bold text-white">{currentUser.name}</p>
+              <p className="break-words text-base font-bold text-white">{liveCurrentUser.name}</p>
               <span
                 className={cn(
                   'mt-1 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest',
-                  DIVISION_BADGE[currentUser.division]
+                  DIVISION_BADGE[liveCurrentUser.division]
                 )}
               >
                 <Trophy className="h-3 w-3" />
-                {currentUser.division}
+                {liveCurrentUser.division}
               </span>
             </div>
           </div>

@@ -121,7 +121,7 @@ describe('TrainingService', () => {
     });
 
     it('should create set with ISG calculation', async () => {
-      const result = await service.createSet({
+      const result = await service.createSet(userId, {
         sessionId,
         exerciseId,
         weightKg: 100,
@@ -152,7 +152,7 @@ describe('TrainingService', () => {
         user: { ...mockSession.user, currentWeightKg: { toNumber: () => 0 }, heightCm: 0 },
       });
 
-      await expect(service.createSet({ sessionId, exerciseId, weightKg: 100, reps: 8 }))
+      await expect(service.createSet(userId, { sessionId, exerciseId, weightKg: 100, reps: 8 }))
         .rejects.toThrow(BadRequestException);
     });
 
@@ -160,7 +160,7 @@ describe('TrainingService', () => {
       const previousBest = { isgScore: { toNumber: () => 70 } };
       mockPrisma.set.findFirst.mockResolvedValue(previousBest);
 
-      const result = await service.createSet({ sessionId, exerciseId, weightKg: 100, reps: 8 });
+      const result = await service.createSet(userId, { sessionId, exerciseId, weightKg: 100, reps: 8 });
 
       expect(result.set.isRecordPr).toBe(true);
       expect(mockPrisma.set.updateMany).toHaveBeenCalled();
@@ -196,7 +196,7 @@ describe('TrainingService', () => {
         exerciseFactor: { toNumber: () => 4.75 }, // Plancha (Plank)
       });
 
-      const result = await service.createSet({ sessionId, exerciseId, durationSec: 60 });
+      const result = await service.createSet(userId, { sessionId, exerciseId, durationSec: 60 });
 
       // ratio = (80*0.5)*60*4.75/80 = 142.5 -> raw = 142.5*1.01 = 143.925
       expect(result.isgResult.finalScore).toBe(143.93);
@@ -219,7 +219,7 @@ describe('TrainingService', () => {
         exerciseFactor: { toNumber: () => 5.5 }, // Flexiones (Push-ups)
       });
 
-      const result = await service.createSet({ sessionId, exerciseId, reps: 20 });
+      const result = await service.createSet(userId, { sessionId, exerciseId, reps: 20 });
 
       // ratio = (80*1.0)*20*5.5/80 = 110 -> raw = 110*1.01 = 111.1
       expect(result.isgResult.finalScore).toBe(111.1);
@@ -242,7 +242,7 @@ describe('TrainingService', () => {
         exerciseFactor: { toNumber: () => 8.0 },
       });
 
-      const result = await service.createSet({
+      const result = await service.createSet(userId, {
         sessionId,
         exerciseId,
         weightKg: 100,
@@ -267,7 +267,7 @@ describe('TrainingService', () => {
         exerciseFactor: { toNumber: () => 4.75 },
       });
 
-      await expect(service.createSet({ sessionId, exerciseId })).rejects.toThrow(
+      await expect(service.createSet(userId, { sessionId, exerciseId })).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -279,7 +279,7 @@ describe('TrainingService', () => {
         exerciseFactor: { toNumber: () => 5.5 },
       });
 
-      await expect(service.createSet({ sessionId, exerciseId })).rejects.toThrow(
+      await expect(service.createSet(userId, { sessionId, exerciseId })).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -292,7 +292,7 @@ describe('TrainingService', () => {
         exerciseFactor: { toNumber: () => 8.0 },
       });
 
-      await expect(service.createSet({ sessionId, exerciseId, reps: 8 })).rejects.toThrow(
+      await expect(service.createSet(userId, { sessionId, exerciseId, reps: 8 })).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -300,8 +300,10 @@ describe('TrainingService', () => {
 
   describe('Timer functionality', () => {
     const sessionId = 'session-1';
+    const userId = 'user-1';
     const mockSession = {
       id: sessionId,
+      userId,
       timerState: 'STOPPED',
       accumulatedTime: 0,
       timerStartedAt: null,
@@ -317,7 +319,7 @@ describe('TrainingService', () => {
           timerStartedAt: new Date(),
         });
 
-        const result = await service.startTimer(sessionId);
+        const result = await service.startTimer(sessionId, userId);
 
         expect(result.timerState).toBe('RUNNING');
         expect(result.timerStartedAt).toBeDefined();
@@ -338,7 +340,7 @@ describe('TrainingService', () => {
           accumulatedTime: 40,
         });
 
-        const result = await service.startTimer(sessionId);
+        const result = await service.startTimer(sessionId, userId);
 
         expect(result.timerState).toBe('RUNNING');
         expect(result.accumulatedTime).toBeGreaterThanOrEqual(40);
@@ -350,7 +352,7 @@ describe('TrainingService', () => {
           timerState: 'RUNNING',
         });
 
-        await expect(service.startTimer(sessionId)).rejects.toThrow(BadRequestException);
+        await expect(service.startTimer(sessionId, userId)).rejects.toThrow(BadRequestException);
       });
     });
 
@@ -370,7 +372,7 @@ describe('TrainingService', () => {
           accumulatedTime: 15,
         });
 
-        const result = await service.pauseTimer(sessionId);
+        const result = await service.pauseTimer(sessionId, userId);
 
         expect(result.timerState).toBe('PAUSED');
         expect(result.accumulatedTime).toBe(15);
@@ -379,7 +381,7 @@ describe('TrainingService', () => {
       it('should throw if not RUNNING', async () => {
         mockPrisma.session.findUnique.mockResolvedValue(mockSession);
 
-        await expect(service.pauseTimer(sessionId)).rejects.toThrow(BadRequestException);
+        await expect(service.pauseTimer(sessionId, userId)).rejects.toThrow(BadRequestException);
       });
     });
 
@@ -400,7 +402,7 @@ describe('TrainingService', () => {
           accumulatedTime: 15,
         });
 
-        const result = await service.stopTimer(sessionId);
+        const result = await service.stopTimer(sessionId, userId);
 
         expect(result.timerState).toBe('STOPPED');
         expect(result.accumulatedTime).toBe(15);
@@ -417,7 +419,7 @@ describe('TrainingService', () => {
         };
         mockPrisma.session.findUnique.mockResolvedValue(runningSession);
 
-        const result = await service.getTimerState(sessionId);
+        const result = await service.getTimerState(sessionId, userId);
 
         expect(result.state).toBe('RUNNING');
         expect(result.elapsedSeconds).toBeGreaterThanOrEqual(15);
@@ -431,7 +433,7 @@ describe('TrainingService', () => {
           accumulatedTime: 45,
         });
 
-        const result = await service.getTimerState(sessionId);
+        const result = await service.getTimerState(sessionId, userId);
 
         expect(result.state).toBe('STOPPED');
         expect(result.elapsedSeconds).toBe(45);
@@ -441,10 +443,11 @@ describe('TrainingService', () => {
 
   describe('Rest Timer', () => {
     const sessionId = 'session-1';
+    const userId = 'user-1';
 
     describe('startRestTimer', () => {
       it('should create rest timer', async () => {
-        mockPrisma.session.findUnique.mockResolvedValue({ id: sessionId });
+        mockPrisma.session.findUnique.mockResolvedValue({ id: sessionId, userId });
         mockPrisma.restTimer.findFirst.mockResolvedValue(null);
         mockPrisma.restTimer.create.mockResolvedValue({
           id: 'rest-1',
@@ -455,23 +458,24 @@ describe('TrainingService', () => {
           durationSec: 0,
         });
 
-        const result = await service.startRestTimer(sessionId, 'set-1');
+        const result = await service.startRestTimer(sessionId, 'set-1', userId);
 
         expect(result.setId).toBe('set-1');
         expect(result.endedAt).toBeNull();
       });
 
       it('should throw if rest timer already active', async () => {
-        mockPrisma.session.findUnique.mockResolvedValue({ id: sessionId });
+        mockPrisma.session.findUnique.mockResolvedValue({ id: sessionId, userId });
         mockPrisma.restTimer.findFirst.mockResolvedValue({ id: 'rest-1', endedAt: null });
 
-        await expect(service.startRestTimer(sessionId)).rejects.toThrow(BadRequestException);
+        await expect(service.startRestTimer(sessionId, undefined, userId)).rejects.toThrow(BadRequestException);
       });
     });
 
     describe('endRestTimer', () => {
       it('should end rest timer and calculate duration', async () => {
         const startedAt = new Date(Date.now() - 10000);
+        mockPrisma.session.findUnique.mockResolvedValue({ id: sessionId, userId });
         mockPrisma.restTimer.findFirst.mockResolvedValue({
           id: 'rest-1',
           sessionId,
@@ -486,7 +490,7 @@ describe('TrainingService', () => {
           durationSec: 10,
         });
 
-        const result = await service.endRestTimer(sessionId);
+        const result = await service.endRestTimer(sessionId, userId);
 
         expect(result.endedAt).toBeDefined();
         expect(result.durationSec).toBe(10);

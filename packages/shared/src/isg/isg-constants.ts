@@ -34,6 +34,7 @@ export const METRIC_TYPES = [
   'REPS_WEIGHT',
   'TIME_ONLY',
   'REPS_ONLY',
+  'TO_FAILURE',
 ] as const;
 
 export const SET_TYPES = [

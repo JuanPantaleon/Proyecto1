@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   calculateISG,
@@ -15,6 +20,15 @@ import {
 export class TrainingService {
   constructor(private prisma: PrismaService) {}
 
+  private async getSessionOwnedOrThrow(sessionId: string, userId: string) {
+    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) throw new NotFoundException('Sesión no encontrada');
+    if (session.userId !== userId) {
+      throw new ForbiddenException('No tenés acceso a esta sesión');
+    }
+    return session;
+  }
+
   async startSession(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
@@ -29,9 +43,8 @@ export class TrainingService {
     });
   }
 
-  async startTimer(sessionId: string) {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) throw new NotFoundException('Sesión no encontrada');
+  async startTimer(sessionId: string, userId: string) {
+    const session = await this.getSessionOwnedOrThrow(sessionId, userId);
     if (session.timerState === 'RUNNING') throw new BadRequestException('El timer ya está en marcha');
 
     const now = new Date();
@@ -51,9 +64,8 @@ export class TrainingService {
     });
   }
 
-  async pauseTimer(sessionId: string) {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) throw new NotFoundException('Sesión no encontrada');
+  async pauseTimer(sessionId: string, userId: string) {
+    const session = await this.getSessionOwnedOrThrow(sessionId, userId);
     if (session.timerState !== 'RUNNING') throw new BadRequestException('El timer no está en marcha');
 
     const now = new Date();
@@ -69,13 +81,12 @@ export class TrainingService {
     });
   }
 
-  async resumeTimer(sessionId: string) {
-    return this.startTimer(sessionId);
+  async resumeTimer(sessionId: string, userId: string) {
+    return this.startTimer(sessionId, userId);
   }
 
-  async stopTimer(sessionId: string) {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) throw new NotFoundException('Sesión no encontrada');
+  async stopTimer(sessionId: string, userId: string) {
+    const session = await this.getSessionOwnedOrThrow(sessionId, userId);
     if (session.timerState === 'STOPPED') throw new BadRequestException('El timer ya está detenido');
 
     let finalAccumulated = session.accumulatedTime;
@@ -95,9 +106,8 @@ export class TrainingService {
     });
   }
 
-  async getTimerState(sessionId: string) {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) throw new NotFoundException('Sesión no encontrada');
+  async getTimerState(sessionId: string, userId: string) {
+    const session = await this.getSessionOwnedOrThrow(sessionId, userId);
 
     let currentElapsed = session.accumulatedTime;
     if (session.timerState === 'RUNNING' && session.timerStartedAt) {
@@ -112,9 +122,8 @@ export class TrainingService {
     };
   }
 
-  async startRestTimer(sessionId: string, setId?: string) {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) throw new NotFoundException('Sesión no encontrada');
+  async startRestTimer(sessionId: string, setId: string | undefined, userId: string) {
+    await this.getSessionOwnedOrThrow(sessionId, userId);
 
     const activeRestTimer = await this.prisma.restTimer.findFirst({
       where: { sessionId, endedAt: null },
@@ -130,7 +139,9 @@ export class TrainingService {
     });
   }
 
-  async endRestTimer(sessionId: string) {
+  async endRestTimer(sessionId: string, userId: string) {
+    await this.getSessionOwnedOrThrow(sessionId, userId);
+
     const restTimer = await this.prisma.restTimer.findFirst({
       where: { sessionId, endedAt: null },
     });
@@ -145,7 +156,8 @@ export class TrainingService {
     });
   }
 
-  async getRestTimers(sessionId: string) {
+  async getRestTimers(sessionId: string, userId: string) {
+    await this.getSessionOwnedOrThrow(sessionId, userId);
     return this.prisma.restTimer.findMany({
       where: { sessionId },
       orderBy: { startedAt: 'desc' },
@@ -159,9 +171,8 @@ export class TrainingService {
     return `${h}:${m}:${s}`;
   }
 
-  async endSession(sessionId: string) {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) throw new NotFoundException('Sesión no encontrada');
+  async endSession(sessionId: string, userId: string) {
+    const session = await this.getSessionOwnedOrThrow(sessionId, userId);
     if (session.endedAt) throw new BadRequestException('La sesión ya ha finalizado');
 
     const sets = await this.prisma.set.findMany({ where: { sessionId } });
@@ -176,26 +187,32 @@ export class TrainingService {
     });
   }
 
-  async createSet(data: {
-    sessionId: string;
-    exerciseId: string;
-    weightKg?: number;
-    reps?: number;
-    durationSec?: number;
-    setType?: SetType;
-    variantBonus?: number;
-    penalty?: number;
-  }) {
+  async createSet(
+    userId: string,
+    data: {
+      sessionId: string;
+      exerciseId: string;
+      weightKg?: number;
+      reps?: number;
+      durationSec?: number;
+      setType?: SetType;
+      variantBonus?: number;
+      penalty?: number;
+    },
+  ) {
     const session = await this.prisma.session.findUnique({
       where: { id: data.sessionId },
       include: { user: true },
     });
     if (!session) throw new NotFoundException('Sesión no encontrada');
+    if (session.userId !== userId) {
+      throw new ForbiddenException('No tenés acceso a esta sesión');
+    }
 
     const exercise = await this.prisma.exercise.findUnique({ where: { id: data.exerciseId } });
     if (!exercise) throw new NotFoundException('Ejercicio no encontrado');
 
-    if (session.user.currentWeightKg <= 0 || session.user.heightCm <= 0) {
+    if (session.user.currentWeightKg.toNumber() <= 0 || session.user.heightCm <= 0) {
       throw new BadRequestException('Usuario debe tener peso y altura configurados');
     }
 
@@ -237,6 +254,25 @@ export class TrainingService {
           variantBonus: data.variantBonus ?? 1.0,
           penalty: data.penalty ?? 1.0,
           setType: data.setType ?? 'NORMAL',
+        };
+        break;
+      }
+      case 'TO_FAILURE': {
+        if (!data.reps && !data.durationSec) {
+          throw new BadRequestException(
+            'Se requiere reps o durationSec para series al fallo',
+          );
+        }
+        isgInput = {
+          metricType: 'TO_FAILURE',
+          reps: data.reps,
+          durationSec: data.durationSec,
+          exerciseFactor: exercise.exerciseFactor.toNumber(),
+          bodyWeightKg,
+          heightCm: session.user.heightCm,
+          variantBonus: data.variantBonus ?? 1.0,
+          penalty: data.penalty ?? 1.0,
+          setType: data.setType ?? 'FAILURE',
         };
         break;
       }
@@ -321,7 +357,7 @@ export class TrainingService {
     return { set, isgResult };
   }
 
-  async getSession(sessionId: string) {
+  async getSession(sessionId: string, userId: string) {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       include: {
@@ -332,6 +368,9 @@ export class TrainingService {
       },
     });
     if (!session) throw new NotFoundException('Sesión no encontrada');
+    if (session.userId !== userId) {
+      throw new ForbiddenException('No tenés acceso a esta sesión');
+    }
     return session;
   }
 

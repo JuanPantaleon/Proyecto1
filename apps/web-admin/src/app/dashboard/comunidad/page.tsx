@@ -18,12 +18,14 @@ import {
   Newspaper,
   ArrowLeft,
   ShieldCheck,
+  Skull,
+  Crown,
+  ClipboardList,
   Target,
   CalendarCheck,
   TrendingUp,
   MapPin,
   Building2,
-  Crown,
   Video,
   Mic,
   Play,
@@ -31,10 +33,11 @@ import {
   Paperclip,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 import { useRole, PLAYER_PROFILE } from '@/lib/roles';
 
 interface Comment {
-  id: number;
+  id: string;
   user: string;
   text: string;
 }
@@ -75,7 +78,10 @@ interface Conversation {
   messages: ChatMessage[];
 }
 
-type Tab = 'feed' | 'amigos' | 'perfil' | 'mensajes';
+type Tab = 'feed' | 'amigos' | 'perfil' | 'mensajes' | 'solicitudes';
+
+type ReactionKey = 'FIRE' | 'SKULL' | 'CROWN';
+type FeedFilter = 'all' | 'following' | 'local' | 'elite';
 
 type PostMediaType = 'image' | 'video';
 
@@ -87,7 +93,7 @@ interface PostMedia {
 }
 
 interface Post {
-  id: number;
+  id: string;
   user: string;
   role: 'player' | 'coach' | 'gym';
   roleLabel: string;
@@ -95,7 +101,7 @@ interface Post {
   text: string;
   isg?: number;
   media?: PostMedia;
-  respects: number;
+  reactions: Record<ReactionKey, number>;
   comments: Comment[];
 }
 
@@ -120,9 +126,51 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase();
 
+interface ApiPost {
+  id: string;
+  author?: { name?: string; role?: string } | null;
+  text?: string;
+  isgScore?: number | null;
+  mediaKind?: string | null;
+  mediaDurationSec?: number | null;
+  reactions?: { FIRE?: number; SKULL?: number; CROWN?: number };
+  myReactions?: { FIRE?: boolean; SKULL?: boolean; CROWN?: boolean };
+  comments?: { id: string; text: string; author?: { name?: string } | null }[];
+}
+
+const roleFromBackend = (r?: string | null): Post['role'] => {
+  if (r === 'TRAINER' || r === 'GYM_ADMIN' || r === 'SUPER_ADMIN') return 'coach';
+  return 'player';
+};
+
+const roleLabelFromBackend = (r?: string | null): string => {
+  if (r === 'TRAINER' || r === 'SUPER_ADMIN') return 'Entrenador/a';
+  if (r === 'GYM_ADMIN') return 'Gimnasio';
+  return 'Jugador';
+};
+
+const FEED_FILTERS: FeedFilter[] = ['all', 'following', 'local', 'elite'];
+const FILTER_LABEL: Record<FeedFilter, string> = {
+  all: 'Todo',
+  following: 'Siguiendo',
+  local: 'Pantafit',
+  elite: 'Élite',
+};
+
+const REACTIONS: {
+  key: ReactionKey;
+  label: string;
+  icon: typeof Flame;
+  activeClass: string;
+}[] = [
+  { key: 'FIRE', label: 'Respeto', icon: Flame, activeClass: 'border-[#EF4444]/60 bg-[#EF4444]/15 text-[#EF4444]' },
+  { key: 'SKULL', label: 'Brutal', icon: Skull, activeClass: 'border-white/40 bg-white/10 text-white' },
+  { key: 'CROWN', label: 'Élite', icon: Crown, activeClass: 'border-[#FBBF24]/60 bg-[#FBBF24]/15 text-[#FBBF24]' },
+];
+
 const INITIAL_POSTS: Post[] = [
   {
-    id: 1,
+    id: 'p1',
     user: 'Lautaro Díaz',
     role: 'player',
     roleLabel: 'Jugador',
@@ -130,54 +178,54 @@ const INITIAL_POSTS: Post[] = [
     text: '¡Nuevo PR en Sentadilla con 120kg!',
     isg: 145,
     media: { type: 'video', gradient: 'from-[#1a1a1a] via-[#EF4444]/20 to-[#0D0D0D]', label: 'Sentadilla · 120 kg × 5', duration: '00:12' },
-    respects: 42,
+    reactions: { FIRE: 42, SKULL: 8, CROWN: 3 },
     comments: [
-      { id: 1, user: 'Valentina Ríos', text: '¡Monstruo! 🔥' },
-      { id: 2, user: 'Martín Quispe', text: 'Eso es mentalidad, crack.' },
+      { id: 'c1', user: 'Valentina Ríos', text: '¡Monstruo! 🔥' },
+      { id: 'c2', user: 'Martín Quispe', text: 'Eso es mentalidad, crack.' },
     ],
   },
   {
-    id: 2,
+    id: 'p2',
     user: 'Valentina Ríos',
     role: 'player',
     roleLabel: 'Jugador',
     division: 'Oro',
     text: 'Ascendí a División Oro 🏆 Gracias por el apoyo de siempre.',
     isg: 98,
-    respects: 67,
-    comments: [{ id: 3, user: 'Lautaro Díaz', text: '¡Bien merecido!' }],
+    reactions: { FIRE: 67, SKULL: 4, CROWN: 2 },
+    comments: [{ id: 'c3', user: 'Lautaro Díaz', text: '¡Bien merecido!' }],
   },
   {
-    id: 3,
+    id: 'p3',
     user: 'Lucía Fernández',
     role: 'coach',
     roleLabel: 'Entrenadora',
     division: '—',
     text: 'Plan de hipertrofia actualizado para el bloque de competencia. ¡Se viene todo!',
     media: { type: 'image', gradient: 'from-[#0D0D0D] via-[#38BDF8]/15 to-[#1a1a1a]', label: 'Programa · Bloque Competitivo' },
-    respects: 31,
+    reactions: { FIRE: 31, SKULL: 1, CROWN: 12 },
     comments: [],
   },
   {
-    id: 4,
+    id: 'p4',
     user: 'Pantafit',
     role: 'gym',
     roleLabel: 'Gimnasio',
     division: '—',
     text: '¡Nuevo equipamiento en la zona de peso muerto! Ven a probarlo.',
     media: { type: 'image', gradient: 'from-[#1a1a1a] via-[#FBBF24]/20 to-[#0D0D0D]', label: 'Zona de Fuerza · Pantafit' },
-    respects: 54,
+    reactions: { FIRE: 54, SKULL: 0, CROWN: 9 },
     comments: [],
   },
   {
-    id: 5,
+    id: 'p5',
     user: 'Martín Quispe',
     role: 'player',
     roleLabel: 'Jugador',
     division: 'Plata',
     text: 'Press de Banca 100 kg cerrado a una repetición. El proceso sigue.',
     isg: 88,
-    respects: 26,
+    reactions: { FIRE: 26, SKULL: 2, CROWN: 1 },
     comments: [],
   },
 ];
@@ -256,14 +304,24 @@ const DEFAULT_VIDEO_MEDIA: PostMedia = {
 const WAVEFORM_BARS = Array.from({ length: 28 }, (_, i) => 10 + ((i * 37) % 26));
 
 export default function ComunidadPage() {
-  const { profile } = useRole();
+  const {
+    role,
+    profile,
+    players,
+    coachingRequests,
+    acceptCoaching,
+    rejectCoaching,
+    routineAssignments,
+    assignRoutine,
+  } = useRole();
   const own = 'role' in profile && profile.role === 'player' ? profile : PLAYER_PROFILE;
 
   const [tab, setTab] = useState<Tab>('feed');
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
-  const [respected, setRespected] = useState<Set<number>>(new Set());
-  const [openComments, setOpenComments] = useState<Set<number>>(new Set());
-  const [draft, setDraft] = useState<Record<number, string>>({});
+  const [myReactions, setMyReactions] = useState<Record<string, Partial<Record<ReactionKey, boolean>>>>({});
+  const [openComments, setOpenComments] = useState<Set<string>>(new Set());
+  const [draft, setDraft] = useState<Record<string, string>>({});
   const [newText, setNewText] = useState('');
   const [newMedia, setNewMedia] = useState<PostMedia | null>(null);
   const [friends] = useState<Friend[]>(INITIAL_FRIENDS);
@@ -281,6 +339,97 @@ export default function ComunidadPage() {
   const [voicePlayingId, setVoicePlayingId] = useState<number | null>(null);
   const [voiceProgress, setVoiceProgress] = useState<Record<number, number>>({});
 
+  const isStaff = role === 'gym' || role === 'coach' || role === 'admin';
+  const [routines, setRoutines] = useState<{ id: string; name: string }[]>([]);
+
+  const athletes: { id: string; name: string }[] = isStaff
+    ? role === 'coach'
+      ? 'linkedStudents' in profile && Array.isArray(profile.linkedStudents)
+        ? profile.linkedStudents.map((s) => ({ id: s.id, name: s.name }))
+        : []
+      : players.map((p) => ({ id: p.id, name: p.name }))
+    : [];
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(
+        localStorage.getItem('ranked_fitness_custom_routines') ?? '[]'
+      );
+      if (Array.isArray(stored)) {
+        setRoutines(
+          stored.map((r: { id?: string | number; name?: string }, i: number) => ({
+            id: String(r.id ?? i),
+            name: r.name ?? `Rutina ${i + 1}`,
+          }))
+        );
+      }
+    } catch {
+      // sin rutinas locales
+    }
+  }, []);
+
+  useEffect(() => {
+    api
+      .get<ApiPost[]>('/api/v1/comunidad/feed', { filter: feedFilter })
+      .then((apiPosts) => {
+        if (!Array.isArray(apiPosts) || apiPosts.length === 0) return;
+        setPosts(
+          apiPosts.map((p) => ({
+            id: p.id,
+            user: p.author?.name ?? 'Usuario',
+            role: roleFromBackend(p.author?.role),
+            roleLabel: roleLabelFromBackend(p.author?.role),
+            division: '—',
+            text: p.text ?? '',
+            isg: typeof p.isgScore === 'number' ? p.isgScore : undefined,
+            media: p.mediaKind
+              ? {
+                  type: p.mediaKind === 'VIDEO' ? 'video' : 'image',
+                  gradient: 'from-[#1a1a1a] via-[#EF4444]/15 to-[#0D0D0D]',
+                  label:
+                    p.mediaKind === 'VIDEO'
+                      ? 'Video de levantamiento'
+                      : 'Imagen',
+                  duration:
+                    typeof p.mediaDurationSec === 'number'
+                      ? `${Math.floor(p.mediaDurationSec / 60)}:${String(p.mediaDurationSec % 60).padStart(2, '0')}`
+                      : undefined,
+                }
+              : undefined,
+            reactions: {
+              FIRE: p.reactions?.FIRE ?? 0,
+              SKULL: p.reactions?.SKULL ?? 0,
+              CROWN: p.reactions?.CROWN ?? 0,
+            },
+            comments: (p.comments ?? []).map((c) => ({
+              id: c.id,
+              user: c.author?.name ?? 'Usuario',
+              text: c.text,
+            })),
+          }))
+        );
+        const mr: Record<string, Partial<Record<ReactionKey, boolean>>> = {};
+        apiPosts.forEach((p) => {
+          if (p.myReactions) mr[p.id] = p.myReactions;
+        });
+        setMyReactions(mr);
+      })
+      .catch(() => undefined);
+  }, [feedFilter]);
+
+  const acceptCoach = (id: string) => {
+    acceptCoaching(id);
+  };
+
+  const rejectCoach = (id: string) => {
+    rejectCoaching(id);
+  };
+
+  const assignRoutineTo = (athleteId: string, routineId: string) => {
+    const routine = routines.find((r) => r.id === routineId);
+    assignRoutine(athleteId, routine?.name ?? routineId);
+  };
+
   const acceptFollow = (id: number) => {
     setAcceptedFollows((prev) => [...prev, id]);
   };
@@ -289,25 +438,32 @@ export default function ComunidadPage() {
     setFollowRequests((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const toggleRespect = (postId: number) => {
-    setRespected((prev) => {
-      const next = new Set(prev);
-      if (next.has(postId)) {
-        next.delete(postId);
-        setPosts((ps) =>
-          ps.map((p) => (p.id === postId ? { ...p, respects: Math.max(0, p.respects - 1) } : p))
-        );
-      } else {
-        next.add(postId);
-        setPosts((ps) =>
-          ps.map((p) => (p.id === postId ? { ...p, respects: p.respects + 1 } : p))
-        );
-      }
+  const toggleReaction = (postId: string, key: ReactionKey) => {
+    setMyReactions((prev) => {
+      const active = prev[postId]?.[key] ?? false;
+      const next = {
+        ...prev,
+        [postId]: { ...prev[postId], [key]: !active },
+      };
+      setPosts((ps) =>
+        ps.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                reactions: {
+                  ...p.reactions,
+                  [key]: Math.max(0, p.reactions[key] + (active ? -1 : 1)),
+                },
+              }
+            : p
+        )
+      );
+      syncReaction(postId, key);
       return next;
     });
   };
 
-  const toggleComments = (postId: number) => {
+  const toggleComments = (postId: string) => {
     setOpenComments((prev) => {
       const next = new Set(prev);
       if (next.has(postId)) next.delete(postId);
@@ -316,17 +472,24 @@ export default function ComunidadPage() {
     });
   };
 
-  const submitComment = (postId: number) => {
+  const submitComment = (postId: string) => {
     const text = (draft[postId] ?? '').trim();
     if (!text) return;
     setPosts((ps) =>
       ps.map((p) =>
         p.id === postId
-          ? { ...p, comments: [...p.comments, { id: Date.now(), user: 'Juan Pérez', text }] }
+          ? {
+              ...p,
+              comments: [
+                ...p.comments,
+                { id: `local-${Date.now()}`, user: 'Juan Pérez', text },
+              ],
+            }
           : p
       )
     );
     setDraft((prev) => ({ ...prev, [postId]: '' }));
+    syncComment(postId, text);
   };
 
   const publish = (e: FormEvent) => {
@@ -334,7 +497,7 @@ export default function ComunidadPage() {
     const text = newText.trim();
     if (!text) return;
     const post: Post = {
-      id: Date.now(),
+      id: `local-${Date.now()}`,
       user: 'Juan Pérez',
       role: 'player',
       roleLabel: 'Jugador',
@@ -342,12 +505,37 @@ export default function ComunidadPage() {
       text,
       isg: 72,
       media: newMedia ?? undefined,
-      respects: 0,
+      reactions: { FIRE: 0, SKULL: 0, CROWN: 0 },
       comments: [],
     };
     setPosts((prev) => [post, ...prev]);
     setNewText('');
     setNewMedia(null);
+    syncCreatePost(text, newMedia);
+  };
+
+  const syncCreatePost = (text: string, media: PostMedia | null) => {
+    void api
+      .post('/api/v1/comunidad/posts', {
+        type: 'MEDIA',
+        text,
+        mediaUrl: media ? `mock://${media.label}` : undefined,
+        mediaKind: media?.type === 'video' ? 'VIDEO' : media ? 'IMAGE' : undefined,
+        mediaDurationSec: media?.type === 'video' ? 15 : undefined,
+      })
+      .catch(() => undefined);
+  };
+
+  const syncReaction = (postId: string, key: ReactionKey) => {
+    void api
+      .post(`/api/v1/comunidad/posts/${postId}/reacciones`, { type: key })
+      .catch(() => undefined);
+  };
+
+  const syncComment = (postId: string, text: string) => {
+    void api
+      .post(`/api/v1/comunidad/posts/${postId}/comentarios`, { text })
+      .catch(() => undefined);
   };
 
   const openChat = (id: number) => {
@@ -414,6 +602,9 @@ export default function ComunidadPage() {
     { key: 'amigos', label: 'Amigos', icon: Users, badge: followRequests.length },
     { key: 'perfil', label: 'Perfil', icon: User },
     { key: 'mensajes', label: 'Mensajes', icon: MessageSquare, badge: unreadTotal },
+    ...(isStaff
+      ? [{ key: 'solicitudes' as Tab, label: 'Solicitudes', icon: ClipboardList, badge: coachingRequests.length }]
+      : []),
   ];
 
   return (
@@ -463,6 +654,31 @@ export default function ComunidadPage() {
         {/* ===== FEED ===== */}
         {tab === 'feed' && (
           <>
+            {/* Filtros de feed: Siguiendo / Pantafit / Élite */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {FEED_FILTERS.map((f) => {
+                const isActive = feedFilter === f;
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setFeedFilter(f)}
+                    className={cn(
+                      'flex flex-shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest transition-all duration-300',
+                      isActive
+                        ? 'bg-[#FBBF24] text-black shadow-[0_0_15px_rgba(251,191,36,0.35)]'
+                        : 'border border-white/5 bg-[#0D0D0D] text-white/50 hover:text-white'
+                    )}
+                    aria-pressed={isActive}
+                  >
+                    {f === 'elite' && <Crown className="h-3.5 w-3.5" />}
+                    {f === 'local' && <Building2 className="h-3.5 w-3.5" />}
+                    {f === 'following' && <Users className="h-3.5 w-3.5" />}
+                    {FILTER_LABEL[f]}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Composer */}
             <form onSubmit={publish} className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-5">
               <div className="flex items-start gap-3">
@@ -565,7 +781,6 @@ export default function ComunidadPage() {
 
             {/* Posts */}
             {posts.map((post) => {
-              const isRespected = respected.has(post.id);
               const isOpen = openComments.has(post.id);
               return (
                 <article
@@ -647,21 +862,30 @@ export default function ComunidadPage() {
                   )}
 
                   {/* Acciones */}
-                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 px-5 py-3">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleRespect(post.id)}
-                        className={cn(
-                          'flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold uppercase tracking-widest transition-all',
-                          isRespected
-                            ? 'border-[#EF4444]/60 bg-[#EF4444]/15 text-[#EF4444]'
-                            : 'border-white/10 bg-white/5 text-white/40 hover:text-white'
-                        )}
-                        aria-pressed={isRespected}
-                      >
-                        <Flame className={cn('h-4 w-4 transition-transform', isRespected && 'scale-125')} />
-                        Respeto
-                      </button>
+                      {REACTIONS.map((reaction) => {
+                        const active = myReactions[post.id]?.[reaction.key] ?? false;
+                        return (
+                          <button
+                            key={reaction.key}
+                            onClick={() => toggleReaction(post.id, reaction.key)}
+                            className={cn(
+                              'flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold uppercase tracking-widest transition-all',
+                              active
+                                ? reaction.activeClass
+                                : 'border-white/10 bg-white/5 text-white/40 hover:text-white'
+                            )}
+                            aria-pressed={active}
+                            aria-label={`${reaction.label}: ${post.reactions[reaction.key]}`}
+                          >
+                            <reaction.icon
+                              className={cn('h-4 w-4 transition-transform', active && 'scale-125')}
+                            />
+                            <span className="tabular-nums">{post.reactions[reaction.key]}</span>
+                          </button>
+                        );
+                      })}
                       <button
                         onClick={() => toggleComments(post.id)}
                         className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-bold uppercase tracking-widest text-white/40 transition-all hover:text-white"
@@ -671,8 +895,8 @@ export default function ComunidadPage() {
                         {post.comments.length}
                       </button>
                     </div>
-                    <span className="text-xs font-black text-white/60">
-                      {post.respects} <span className="font-semibold text-white/30">respetos</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">
+                      {Object.values(post.reactions).reduce((a, b) => a + b, 0)} reacciones
                     </span>
                   </div>
 
@@ -850,6 +1074,114 @@ export default function ComunidadPage() {
                       </li>
                     );
                   })}
+                </ul>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ===== SOLICITUDES (Entrenador / Isla) ===== */}
+        {tab === 'solicitudes' && (
+          <>
+            {/* Solicitudes de coaching entrantes */}
+            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-[#FBBF24]" />
+                <h2 className="text-sm font-black uppercase tracking-widest text-white">
+                  Solicitudes de coaching
+                </h2>
+              </div>
+              {coachingRequests.length === 0 ? (
+                <p className="py-6 text-center text-xs font-semibold text-white/40">
+                  No hay solicitudes pendientes.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {coachingRequests.map((req) => {
+                    return (
+                      <li
+                        key={req.id}
+                        className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#FBBF24]/30 to-[#EF4444]/20 text-[11px] font-black text-white">
+                            {initials(req.name)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-white">{req.name}</p>
+                            <p className="truncate text-xs font-semibold text-white/40">{req.note}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => acceptCoach(req.id)}
+                              className="flex items-center gap-1 rounded-xl bg-[#FBBF24] px-3.5 py-2 text-xs font-black uppercase tracking-widest text-black transition-all hover:bg-[#fcd34d] active:scale-95"
+                            >
+                              <Check className="h-3.5 w-3.5" /> Aceptar
+                            </button>
+                            <button
+                              onClick={() => rejectCoach(req.id)}
+                              className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-black uppercase tracking-widest text-white/40 transition-all hover:text-[#EF4444] active:scale-95"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Atletas vinculados + asignación de rutinas */}
+            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <Users className="h-5 w-5 text-[#EF4444]" />
+                <h2 className="text-sm font-black uppercase tracking-widest text-white">
+                  Atletas vinculados
+                </h2>
+              </div>
+              {athletes.length === 0 ? (
+                <p className="py-6 text-center text-xs font-semibold text-white/40">
+                  Aún no tenés atletas vinculados. Aceptá una solicitud para comenzar.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {athletes.map((athlete) => (
+                    <li key={athlete.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#EF4444]/30 to-[#FBBF24]/20 text-[11px] font-black text-white">
+                          {initials(athlete.name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-white">{athlete.name}</p>
+                          <p className="truncate text-xs font-semibold text-white/40">
+                            {role === 'coach' ? 'Jugador bajo tu plan' : 'Miembro de la isla'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Dumbbell className="h-4 w-4 flex-shrink-0 text-white/30" />
+                        <select
+                          value={routineAssignments[athlete.id] ?? ''}
+                          onChange={(e) => assignRoutineTo(athlete.id, e.target.value)}
+                          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#FBBF24]"
+                        >
+                          <option value="">Asignar rutina…</option>
+                          {routines.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {routineAssignments[athlete.id] && (
+                        <p className="mt-2 flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-[#FBBF24]">
+                          <Check className="h-3.5 w-3.5" /> Rutina asignada
+                        </p>
+                      )}
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>

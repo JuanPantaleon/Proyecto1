@@ -1,6 +1,26 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import type { MetricType, SetType } from '@ranked-fitness/shared';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+
+const ACTIVE_VIEW_HEADER: Record<string, 'PLAYER' | 'COACH' | 'GYM' | 'ADMIN'> = {
+  player: 'PLAYER',
+  coach: 'COACH',
+  gym: 'GYM',
+  admin: 'ADMIN',
+};
+
+export function getActiveViewHeader(): 'PLAYER' | 'COACH' | 'GYM' | 'ADMIN' | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('ranked_fitness_active_profile');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { active?: string };
+    return ACTIVE_VIEW_HEADER[parsed.active ?? ''] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 class ApiClient {
   private client: AxiosInstance;
@@ -19,6 +39,10 @@ class ApiClient {
           const token = localStorage.getItem('auth_token');
           if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
+          }
+          const activeView = getActiveViewHeader();
+          if (activeView && config.headers) {
+            config.headers['X-Active-View'] = activeView;
           }
         }
         return config;
@@ -74,16 +98,35 @@ export const api = new ApiClient();
 export interface Exercise {
   id: string;
   name: string;
+  description: string | null;
   muscleGroup: string;
   level: string;
-  massValue: number;
-  demandValue: number;
-  complexityValue: number;
-  impactValue: number;
-  exerciseFactor: number;
+  metricType: MetricType;
+  massValue: number | null;
+  demandValue: number | null;
+  complexityValue: number | null;
+  impactValue: number | null;
+  exerciseFactor: number | string;
+  isCustom: boolean;
+  defaultSets: number | null;
+  defaultReps: number | null;
+  defaultWeight: number | string | null;
+  defaultSec: number | null;
+  createdById: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateCustomExerciseInput {
+  name: string;
+  description?: string;
+  metricType: MetricType;
+  defaultSets?: number;
+  defaultReps?: number;
+  defaultWeight?: number;
+  defaultSec?: number;
+  exerciseFactor?: number;
 }
 
 export interface ExerciseFilters {
@@ -111,12 +154,14 @@ export interface Set {
   sessionId: string;
   exerciseId: string;
   userId: string;
-  weightKg: number;
-  reps: number;
+  weightKg: number | string | null;
+  reps: number | null;
+  durationSec: number | null;
+  setType: SetType;
   variantBonus: number;
   penalty: number;
   isRecordPr: boolean;
-  isgScore: number;
+  isgScore: number | string;
   createdAt: string;
   exercise?: Exercise;
 }
@@ -124,8 +169,10 @@ export interface Set {
 export interface CreateSetDto {
   sessionId: string;
   exerciseId: string;
-  weightKg: number;
-  reps: number;
+  weightKg?: number;
+  reps?: number;
+  durationSec?: number;
+  setType?: SetType;
   variantBonus?: number;
   penalty?: number;
 }
@@ -157,7 +204,8 @@ export interface User {
   currentWeightKg: number;
   heightCm: number;
   streakDays: number;
-  role: 'USER' | 'TRAINER' | 'GYM_ADMIN' | 'SUPER_ADMIN';
+  role: 'USER' | 'TRAINER' | 'GYM_ADMIN' | 'SUPER_ADMIN' | 'OWNER';
+  isOnboarded: boolean;
   gymId: string | null;
   createdAt: string;
   updatedAt: string;

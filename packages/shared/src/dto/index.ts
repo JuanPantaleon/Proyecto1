@@ -15,6 +15,16 @@ export const loginSchema = z.object({
   password: z.string(),
 });
 
+export const BASE_ROLES = ['PLAYER', 'COACH', 'GYM'] as const;
+
+export const completeOnboardingSchema = z.object({
+  role: z.enum(BASE_ROLES),
+  firstName: z.string().trim().min(1).max(100).optional(),
+  imageUrl: z.string().url().or(z.literal('')).optional(),
+  currentWeightKg: z.number().positive().max(500).optional(),
+  heightCm: z.number().int().positive().max(300).optional(),
+});
+
 const exerciseBaseSchema = z.object({
   name: z.string().min(1).max(100),
   muscleGroup: z.enum(MUSCLE_GROUPS),
@@ -32,6 +42,17 @@ export const createExerciseSchema = exerciseBaseSchema.extend({
 });
 
 export const updateExerciseSchema = exerciseBaseSchema.partial();
+
+export const createCustomExerciseSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).optional(),
+  metricType: z.enum(METRIC_TYPES),
+  defaultSets: z.number().int().min(1).max(20).optional(),
+  defaultReps: z.number().int().min(1).max(100).optional(),
+  defaultWeight: z.number().min(0).max(1000).optional(),
+  defaultSec: z.number().int().min(1).max(3600).optional(),
+  exerciseFactor: z.number().min(0.1).max(3).default(1.0),
+});
 
 export const startSessionSchema = z.object({
   userId: z.string().uuid(),
@@ -73,8 +94,12 @@ export const updateUserSchema = z.object({
 
 export type RegisterUserDto = z.infer<typeof registerUserSchema>;
 export type LoginDto = z.infer<typeof loginSchema>;
+export type CompleteOnboardingDto = z.infer<typeof completeOnboardingSchema>;
 export type CreateExerciseDto = z.infer<typeof createExerciseSchema>;
 export type UpdateExerciseDto = z.infer<typeof updateExerciseSchema>;
+export type CreateCustomExerciseDto = z.infer<typeof createCustomExerciseSchema>;
 export type StartSessionDto = z.infer<typeof startSessionSchema>;
 export type CreateSetDto = z.infer<typeof createSetSchema>;
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
+
+export * from './community';

@@ -1,0 +1,49 @@
+# Render Blueprint — Ranked Fitness
+# Despliega el backend (NestJS) + una base PostgreSQL gestionada por Render.
+# Alternativa recomendada en el prompt: apuntar DATABASE_URL a Supabase (ver CHECKLIST_DEPLOY.md).
+#
+# Para usar: conectar el repo a Render y elegir "Blueprint" (render.yaml se detecta
+# automáticamente en la raíz).
+
+services:
+  - type: web
+    name: ranked-fitness-backend
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: .
+    healthCheckPath: /api/health
+    # Genera el cliente Prisma y compila el backend (webpack → apps/backend/dist/main.js).
+    buildCommand: cd apps/backend && npx prisma generate && cd ../.. && npx nx build backend
+    # Aplica migraciones pendientes y arranca. `prisma migrate deploy` es idempotente.
+    startCommand: cd apps/backend && npx prisma migrate deploy && cd ../.. && node apps/backend/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ranked-fitness-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      # Email raíz: OTORGA el rol OWNER y el acceso a la mini-isla 👑 (NO cambiar).
+      - key: SUPER_ADMIN_EMAIL
+        value: juanpantaleon06@gmail.com
+      # Orígenes CORS permitidos, separados por comas. Reemplazar por la URL real de Vercel.
+      - key: CORS_ORIGINS
+        value: https://ranked-fitness.vercel.app,https://www.ranked-fitness.vercel.app
+      # Clerk — completar en el panel de Render (usar las claves de PRODUCCIÓN de Clerk).
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+
+databases:
+  - name: ranked-fitness-db
+    plan: free
+    databaseName: ranked_fitness
+    user: ranked_fitness

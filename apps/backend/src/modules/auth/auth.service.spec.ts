@@ -87,14 +87,32 @@ describe('AuthService', () => {
       const result = await service.syncUserFromClerk(clerkUser);
 
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { clerkId: 'clerk-123' },
+        where: { id: 'user-1' },
         data: expect.objectContaining({
+          clerkId: 'clerk-123',
           email: 'test@test.com',
           firstName: 'Test',
           lastName: 'User',
         }),
       });
       expect(result.email).toBe('test@test.com');
+    });
+
+    it('should adopt a seed user by email and reassign its clerkId', async () => {
+      const seedUser = { id: 'user-seed', clerkId: 'clerk_seed_owner_x', email: 'test@test.com' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(seedUser);
+      mockPrisma.user.update.mockResolvedValue({
+        ...seedUser,
+        clerkId: clerkUser.id,
+      });
+
+      const result = await service.syncUserFromClerk(clerkUser);
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-seed' },
+        data: expect.objectContaining({ clerkId: 'clerk-123' }),
+      });
+      expect(result.clerkId).toBe('clerk-123');
     });
 
     it('should handle missing optional fields', async () => {

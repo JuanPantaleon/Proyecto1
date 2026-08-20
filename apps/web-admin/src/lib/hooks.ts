@@ -1,12 +1,14 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Exercise, type ExerciseFilters, type Session, type Set, type CreateSetDto, type RestTimer, type TimerState, type User } from './api';
+import type { ISGResult } from '@ranked-fitness/shared';
+import { api, type Exercise, type ExerciseFilters, type Session, type Set, type CreateSetDto, type RestTimer, type TimerState, type User, type CreateCustomExerciseInput } from './api';
 
-export function useExercises(filters?: ExerciseFilters) {
+export function useExercises(filters?: ExerciseFilters, enabled = true) {
   return useQuery({
     queryKey: ['exercises', filters],
     queryFn: () => api.get<Exercise[]>('/api/v1/catalogo/ejercicios', filters as Record<string, unknown>),
+    enabled,
   });
 }
 
@@ -35,6 +37,25 @@ export function useCreateExercise() {
   });
 }
 
+export function useCustomExercises(enabled = true) {
+  return useQuery({
+    queryKey: ['customExercises'],
+    queryFn: () => api.get<Exercise[]>('/api/v1/exercises'),
+    enabled,
+  });
+}
+
+export function useCreateCustomExercise() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateCustomExerciseInput) => api.post<Exercise>('/api/v1/exercises', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customExercises'] });
+      queryClient.invalidateQueries({ queryKey: ['exercises'] });
+    },
+  });
+}
+
 export function useUpdateExercise() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -56,11 +77,11 @@ export function useDeleteExercise() {
   });
 }
 
-export function useSessions(userId?: string, limit = 20, offset = 0) {
+export function useSessions(userId?: string, limit = 20, offset = 0, enabled = true) {
   return useQuery({
     queryKey: ['sessions', userId, limit, offset],
     queryFn: () => api.get<Session[]>(`/api/v1/entrenamiento/mis-sesiones`, { limit, offset }),
-    enabled: !!userId,
+    enabled: !!userId && enabled,
   });
 }
 
@@ -91,9 +112,11 @@ export function useEndSession() {
 export function useCreateSet() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateSetDto) => api.post<{ set: Set; isgResult: any }>('/api/v1/entrenamiento/set', data),
+    mutationFn: (data: CreateSetDto) =>
+      api.post<{ set: Set; isgResult: ISGResult }>('/api/v1/entrenamiento/set', data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['session', variables.sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
     },
   });
 }
@@ -152,9 +175,10 @@ export function useEndRestTimer() {
   });
 }
 
-export function useCurrentUser() {
+export function useCurrentUser(enabled = true) {
   return useQuery({
     queryKey: ['currentUser'],
     queryFn: () => api.get<User>('/api/v1/auth/me'),
+    enabled,
   });
 }

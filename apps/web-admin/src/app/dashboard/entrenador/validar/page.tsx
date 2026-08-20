@@ -36,7 +36,7 @@ export default function ValidarSesionPage() {
   const [lift, setLift] = useState<LiftData | null>(null);
   const [pantafitTrust, setPantafitTrust] = useState(128);
 
-  const isCoach = role === 'coach';
+  const isCoach = role === 'coach' || role === 'admin';
   const gymName = 'role' in profile ? 'Pantafit' : profile.name;
 
   const simulateScan = () => {

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useExercises, useMuscleGroups, useCreateExercise, useUpdateExercise, useDeleteExercise } from '@/lib/hooks';
 import { formatISG, getMuscleGroupLabel, getLevelLabel } from '@/lib/utils';
+import ExerciseInfo from '@/components/training/exercise-info';
 
 const levels = ['PRINCIPIANTE', 'INTERMEDIO', 'AVANZADO'];
 const muscleGroups = ['PECHO', 'ESPALDA', 'PIERNAS', 'HOMBROS', 'BRAZOS', 'CORE', 'CARDIO', 'OTROS'];
@@ -284,7 +285,12 @@ export default function CatalogoPage() {
                 <TableBody>
                   {exercises?.map((exercise) => (
                     <TableRow key={exercise.id}>
-                      <TableCell className="font-medium">{exercise.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <span className="max-w-[16rem] truncate">{exercise.name}</span>
+                          <ExerciseInfo name={exercise.name} description={exercise.description} />
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{getMuscleGroupLabel(exercise.muscleGroup)}</Badge>
                       </TableCell>
@@ -296,10 +302,14 @@ export default function CatalogoPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono font-bold text-primary">
-                        {formatISG(exercise.exerciseFactor)}
+                        {formatISG(Number(exercise.exerciseFactor) || 0)}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {exercise.massValue},{exercise.demandValue},{exercise.complexityValue},{exercise.impactValue}
+                        {exercise.isCustom ? (
+                          <Badge variant="accent">Custom</Badge>
+                        ) : (
+                          `${exercise.massValue},${exercise.demandValue},${exercise.complexityValue},${exercise.impactValue}`
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">

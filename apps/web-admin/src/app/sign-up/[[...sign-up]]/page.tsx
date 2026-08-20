@@ -31,7 +31,6 @@ export default function SignUpPage() {
             routing="path"
             path="/sign-up"
             signInUrl="/sign-in"
-            // socialProviders={['google']} // Google OAuth deshabilitado - descomenta para activar
           />
         </CardContent>
       </Card>
