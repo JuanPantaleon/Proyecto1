@@ -24,8 +24,22 @@ export class JwtAuthGuard implements CanActivate {
 
     let payload: any;
     try {
+      // Decodificamos el `iss` del token (sin verificar) para pedirle a
+      // verifyToken que obtenga el JWKS de LA INSTANCIA QUE FIRMÓ el token,
+      // no de la instancia a la que pertenece CLERK_SECRET_KEY. Esto evita el
+      // error de kid mismatch cuando frontend y backend apuntan a distintas
+      // aplicaciones de Clerk.
+      let tokenIssuer: string | undefined;
+      try {
+        const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        tokenIssuer = JSON.parse(Buffer.from(b64, 'base64').toString()).iss;
+      } catch {
+        /* ignore */
+      }
+
       payload = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY,
+        ...(tokenIssuer ? { issuer: tokenIssuer } : {}),
       });
     } catch (err: any) {
       let detail = err?.message ?? String(err);
