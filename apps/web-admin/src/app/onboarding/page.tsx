@@ -85,15 +85,6 @@ const ARGENTINE_PROVINCES = [
   'Tucumán',
 ];
 
-const SPECIALTIES = [
-  { value: 'strength', label: 'Fuerza y Potencia' },
-  { value: 'hypertrophy', label: 'Hipertrofia' },
-  { value: 'endurance', label: 'Resistencia' },
-  { value: 'functional', label: 'Funcional' },
-  { value: 'mobility', label: 'Movilidad' },
-  { value: 'rehab', label: 'Rehabilitación' },
-];
-
 const STEPS = [
   { n: 1, label: 'Rol' },
   { n: 2, label: 'Perfil' },
@@ -114,7 +105,7 @@ const playerStep3Schema = z.object({
 });
 
 const coachStep3Schema = z.object({
-  specialty: z.string().min(1, 'Selecciona una especialidad'),
+  specialty: z.string().min(1, 'Ingresa tu área de especialización'),
 });
 
 const gymStep3Schema = z.object({
@@ -534,16 +525,13 @@ function OnboardingForm() {
           {selected === 'coach' && (
             <div className="space-y-1.5">
               <Label htmlFor="specialty" className="block text-sm font-medium text-foreground">Área de especialización</Label>
-              <Select value={specialty} onValueChange={(v) => { setSpecialty(v); clearError('specialty'); }}>
-                <SelectTrigger className="h-12 w-full" id="specialty">
-                  <SelectValue placeholder="Selecciona tu especialidad" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SPECIALTIES.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="specialty"
+                className="h-12 w-full"
+                placeholder="Ej: Fuerza, hipertrofia, rehabilitación…"
+                value={specialty}
+                onChange={(e) => { setSpecialty(e.target.value); clearError('specialty'); }}
+              />
               {errors.specialty && <p className="text-xs text-[#EF4444]">{errors.specialty}</p>}
             </div>
           )}
@@ -601,7 +589,7 @@ function OnboardingForm() {
                 </>
               )}
               {selected === 'coach' && specialty && (
-                <div className="flex justify-between"><dt className="text-muted-foreground">Especialidad</dt><dd className="text-foreground">{SPECIALTIES.find((s) => s.value === specialty)?.label}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Especialidad</dt><dd className="text-foreground">{specialty}</dd></div>
               )}
               {selected === 'gym' && gymName && (
                 <div className="flex justify-between"><dt className="text-muted-foreground">Gimnasio</dt><dd className="text-foreground">{gymName}</dd></div>

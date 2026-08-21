@@ -28,9 +28,15 @@ export class JwtAuthGuard implements CanActivate {
         secretKey: process.env.CLERK_SECRET_KEY,
       });
     } catch (err: any) {
-      throw new UnauthorizedException(
-        `Token inválido o expirado: ${err?.message ?? err}`,
-      );
+      let detail = err?.message ?? String(err);
+      try {
+        const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = JSON.parse(Buffer.from(b64, 'base64').toString());
+        detail += ` | iss=${decoded.iss} sub=${decoded.sub}`;
+      } catch {
+        /* ignore decode errors */
+      }
+      throw new UnauthorizedException(`Token inválido o expirado: ${detail}`);
     }
 
     const clerkId = payload?.sub as string | undefined;
