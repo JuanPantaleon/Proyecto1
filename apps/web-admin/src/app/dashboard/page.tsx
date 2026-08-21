@@ -33,25 +33,24 @@ export default function DashboardDispatcher() {
   const { role, isOwner } = useRole();
   const [isOnboarded, setIsOnboarded] = useState(false);
 
-  // Verificar estado de onboarding al cargar
+  // Verificar estado de onboarding al cargar (SOLO el backend es fuente de verdad)
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
 
-    // Primero verificamos el localStorage como cache rápido
-    const cachedOnboarded = localStorage.getItem('ranked_fitness_onboarded') === 'true';
-    setIsOnboarded(cachedOnboarded);
-
-    // Luego verificamos con el backend para confirmar
+    // No usamos cache de localStorage: un valor 'true' stale de una sesión
+    // previa causaba redirect prematuro a /dashboard antes de consultar /me.
     import('@/lib/api').then(({ api }) => {
       api.get<{ isOnboarded?: boolean; role?: string }>('/api/v1/auth/me')
         .then((me) => {
-          const fullyOnboarded = me?.isOnboarded === true && me?.role !== 'USER';
+          // Un Jugador (PLAYER) en DB tiene role 'USER', por eso solo chequeamos isOnboarded.
+          const fullyOnboarded = me?.isOnboarded === true;
           setIsOnboarded(fullyOnboarded);
           localStorage.setItem('ranked_fitness_onboarded', String(fullyOnboarded));
         })
         .catch(() => {
           // Si falla, asumimos no onboarded por seguridad
           setIsOnboarded(false);
+          localStorage.setItem('ranked_fitness_onboarded', 'false');
         });
     });
   }, [isLoaded, isSignedIn]);

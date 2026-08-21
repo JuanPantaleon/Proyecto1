@@ -43,8 +43,10 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
       .then((me) => {
         if (cancelled) return;
         
-        // Usuario está onboarded si: isOnboarded === true Y role NO es 'USER' (rol base sin asignar)
-        const isFullyOnboarded = me?.isOnboarded === true && me?.role !== 'USER';
+        // Usuario está onboarded si isOnboarded === true.
+        // Nota: un Jugador (PLAYER) se persiste en DB con role 'USER', por lo que
+        // NO podemos descartar 'USER' aquí o crearíamos un loop infinito para jugadores.
+        const isFullyOnboarded = me?.isOnboarded === true;
         
         if (isFullyOnboarded) {
           localStorage.setItem('ranked_fitness_onboarded', 'true');

@@ -3,7 +3,8 @@
 import { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { User, Building2, GraduationCap, ImagePlus, ArrowRight } from 'lucide-react';
+import { User, Building2, GraduationCap, ImagePlus, ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { RoleProvider, useRole, type AppRole } from '@/lib/roles';
 import { api } from '@/lib/api';
@@ -53,25 +54,94 @@ const SPECIALTIES = [
   { value: 'rehab', label: 'Rehabilitación' },
 ];
 
-type OnboardingStep = 1 | 2;
+const STEPS = [
+  { n: 1, label: 'Rol' },
+  { n: 2, label: 'Perfil' },
+  { n: 3, label: 'Detalles' },
+  { n: 4, label: 'Confirmar' },
+];
+
+type Step = 1 | 2 | 3 | 4;
+
+const step2Schema = z.object({
+  firstName: z.string().trim().min(1, 'Ingresa tu nombre').max(100),
+});
+
+const playerStep3Schema = z.object({
+  age: z.coerce.number().int().min(10, 'Edad mínima 10 años').max(100, 'Edad máxima 100 años'),
+  weight: z.coerce.number().positive('Peso inválido').max(300, 'Peso máximo 300 kg'),
+  height: z.coerce.number().int().min(100, 'Altura mínima 100 cm').max(250, 'Altura máxima 250 cm'),
+});
+
+const coachStep3Schema = z.object({
+  specialty: z.string().min(1, 'Selecciona una especialidad'),
+});
+
+const gymStep3Schema = z.object({
+  gymName: z.string().trim().min(1, 'Ingresa el nombre del gimnasio').max(100),
+});
+
+function ProgressIndicator({ current }: { current: Step }) {
+  return (
+    <div className="flex items-center justify-center gap-2">
+      {STEPS.map((s, idx) => {
+        const isActive = s.n === current;
+        const isDone = s.n < current;
+        return (
+          <div key={s.n} className="flex items-center gap-2">
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-all duration-300',
+                  isDone && 'border-[#EF4444] bg-[#EF4444] text-black',
+                  isActive && 'border-[#FBBF24] text-[#FBBF24] shadow-[0_0_16px_rgba(251,191,36,0.25)]',
+                  !isDone && !isActive && 'border-white/15 text-white/30',
+                )}
+              >
+                {isDone ? <Check className="h-4 w-4" /> : s.n}
+              </div>
+              <span
+                className={cn(
+                  'text-[10px] font-semibold uppercase tracking-wider',
+                  isActive ? 'text-[#FBBF24]' : 'text-white/30',
+                )}
+              >
+                {s.label}
+              </span>
+            </div>
+            {idx < STEPS.length - 1 && (
+              <div
+                className={cn(
+                  'h-px w-6 sm:w-10 transition-colors duration-300',
+                  s.n < current ? 'bg-[#EF4444]' : 'bg-white/10',
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function OnboardingForm() {
   const router = useRouter();
   const { user, isLoaded: userLoaded } = useUser();
   const { switchRole, updatePlayerProfile } = useRole();
-  const { success } = useToastHelpers();
+  const { success, error: toastError } = useToastHelpers();
 
-  const [step, setStep] = useState<OnboardingStep>(1);
+  const [step, setStep] = useState<Step>(1);
   const [selected, setSelected] = useState<AppRole | null>(null);
   const [firstName, setFirstName] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [location, setLocation] = useState('');
   const [selectedGym, setSelectedGym] = useState('');
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
-  const [location, setLocation] = useState('');
   const [specialty, setSpecialty] = useState('');
   const [gymName, setGymName] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +156,10 @@ function OnboardingForm() {
     }
   }, [user, userLoaded, firstName, photo]);
 
+  const clearError = (key: string) => {
+    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: '' }));
+  };
+
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -94,38 +168,70 @@ function OnboardingForm() {
     reader.readAsDataURL(file);
   };
 
-  const handleBack = () => {
-    setStep(1);
+  const validateStep = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (step === 2) {
+      const r = step2Schema.safeParse({ firstName: firstName.trim() });
+      if (!r.success) errs.firstName = r.error.issues[0].message;
+    } else if (step === 3) {
+      if (selected === 'player') {
+        const r = playerStep3Schema.safeParse({ age, weight, height });
+        if (!r.success) r.error.issues.forEach((i) => { errs[String(i.path[0])] = i.message; });
+      } else if (selected === 'coach') {
+        const r = coachStep3Schema.safeParse({ specialty });
+        if (!r.success) errs.specialty = r.error.issues[0].message;
+      } else if (selected === 'gym') {
+        const r = gymStep3Schema.safeParse({ gymName: gymName.trim() });
+        if (!r.success) errs.gymName = r.error.issues[0].message;
+      }
+    }
+    setErrors(errs);
+    return Object.values(errs).every((v) => !v);
   };
 
-  const complete = async () => {
+  const goNext = () => {
+    if (step === 1) {
+      if (!selected) return;
+      setStep(2);
+      return;
+    }
+    if (validateStep() && step < 4) {
+      setStep((s) => (s + 1) as Step);
+    }
+  };
+
+  const goBack = () => {
+    if (step > 1) setStep((s) => (s - 1) as Step);
+  };
+
+  const submit = async () => {
     if (!selected) return;
     setSubmitting(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
       const payload: Record<string, unknown> = {
         role: selected.toUpperCase(),
         firstName: firstName.trim() || undefined,
-        imageUrl: photo || '',
+        // El backend valida imageUrl como URL; un data: URL (subida local) no pasaría.
+        // Solo enviamos la URL http(s) de Clerk.
+        imageUrl: photo && photo.startsWith('http') ? photo : undefined,
       };
 
       if (selected === 'player') {
-        payload.age = age ? parseInt(age) : undefined;
-        payload.weightKg = weight ? parseFloat(weight) : undefined;
-        payload.heightCm = height ? parseInt(height) : undefined;
-        payload.location = location || undefined;
+        payload.age = age ? parseInt(age, 10) : undefined;
+        // CRÍTICO: el backend espera 'currentWeightKg', NO 'weightKg'.
+        payload.currentWeightKg = weight ? parseFloat(weight) : undefined;
+        payload.heightCm = height ? parseInt(height, 10) : undefined;
+        payload.location = location.trim() || undefined;
         if (selectedGym) payload.gymId = selectedGym;
       } else if (selected === 'coach') {
         payload.specialty = specialty || undefined;
-        payload.location = location || undefined;
+        payload.location = location.trim() || undefined;
       } else if (selected === 'gym') {
-        payload.gymName = gymName || undefined;
-        payload.location = location || undefined;
+        payload.gymName = gymName.trim() || undefined;
+        payload.location = location.trim() || undefined;
       }
 
-      if (token) {
-        await api.post('/api/v1/auth/onboarding', payload);
-      }
+      await api.post('/api/v1/auth/onboarding', payload);
 
       localStorage.setItem('ranked_fitness_onboarded', 'true');
       switchRole(selected);
@@ -134,240 +240,19 @@ function OnboardingForm() {
         updatePlayerProfile({ name: firstName.trim() });
       }
 
-      success('¡Bienvenido a Ranked Fitness!', `Tu perfil como ${ROLE_OPTIONS.find(r => r.id === selected)?.label} está listo.`);
+      const label = ROLE_OPTIONS.find((r) => r.id === selected)?.label ?? selected;
+      success('¡Bienvenido a Ranked Fitness!', `Tu perfil como ${label} está listo.`);
       router.push('/dashboard');
-    } catch {
-      localStorage.setItem('ranked_fitness_onboarded', 'true');
-      switchRole(selected);
-      success('¡Bienvenido a Ranked Fitness!', `Tu perfil como ${ROLE_OPTIONS.find(r => r.id === selected)?.label} está listo.`);
-      router.push('/dashboard');
+    } catch (e: any) {
+      const raw = e?.response?.data?.message ?? e?.message ?? 'Intenta nuevamente.';
+      const msg = Array.isArray(raw) ? raw[0] : raw;
+      toastError('No pudimos completar el registro', String(msg));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const getStepFields = () => {
-    if (step === 1) return null;
-
-    const commonFields = (
-      <section className="space-y-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          2 · Tu perfil
-        </span>
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className={cn(
-              'relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-all duration-200',
-              photo ? 'border-[#FBBF24]' : 'border-dashed border-border hover:border-border-hover'
-            )}
-            aria-label="Subir foto de perfil"
-          >
-            {photo ? (
-              <img src={photo} alt="Foto de perfil" className="h-full w-full object-cover" />
-            ) : (
-              <ImagePlus className="h-6 w-6 text-muted-foreground" />
-            )}
-          </button>
-          <div className="flex-1">
-            <Input
-              label="Nombre"
-              placeholder="Tu nombre"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhoto}
-            />
-          </div>
-        </div>
-      </section>
-    );
-
-    if (selected === 'player') {
-      return (
-        <>
-          {commonFields}
-          <section className="space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              3 · Datos físicos
-            </span>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="age" className="block text-sm font-medium text-foreground">
-                  Edad
-                </Label>
-                <Input
-                  id="age"
-                  type="number"
-                  placeholder="Edad"
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                  min={10}
-                  max={100}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="weight" className="block text-sm font-medium text-foreground">
-                  Peso (kg)
-                </Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  step="0.1"
-                  placeholder="70.5"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  min={20}
-                  max={300}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="height" className="block text-sm font-medium text-foreground">
-                  Altura (cm)
-                </Label>
-                <Input
-                  id="height"
-                  type="number"
-                  placeholder="175"
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  min={100}
-                  max={250}
-                />
-              </div>
-            </div>
-          </section>
-          <section className="space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              4 · Ubicación
-            </span>
-            <div className="space-y-1.5">
-              <Label htmlFor="location" className="block text-sm font-medium text-foreground">
-                Ciudad, Provincia
-              </Label>
-              <Input
-                id="location"
-                placeholder="Ej: San Salvador de Jujuy, Jujuy"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-          </section>
-          <section className="space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              5 · Gimnasio base (opcional)
-            </span>
-            <Label htmlFor="gym" className="block text-sm font-medium text-foreground">
-              Gimnasio
-            </Label>
-            <Select value={selectedGym} onValueChange={setSelectedGym}>
-              <SelectTrigger className="h-12 w-full" id="gym">
-                <SelectValue placeholder="Selecciona tu gimnasio" />
-              </SelectTrigger>
-              <SelectContent>
-                {GYM_OPTIONS.map((gym) => (
-                  <SelectItem key={gym.id} value={gym.id}>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">{gym.name}</span>
-                      <span className="text-xs text-muted-foreground">{gym.country} - {gym.province}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </section>
-        </>
-      );
-    }
-
-    if (selected === 'coach') {
-      return (
-        <>
-          {commonFields}
-          <section className="space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              3 · Especialidad
-            </span>
-            <Label htmlFor="specialty" className="block text-sm font-medium text-foreground">
-              Área de especialización
-            </Label>
-            <Select value={specialty} onValueChange={setSpecialty}>
-              <SelectTrigger className="h-12 w-full" id="specialty">
-                <SelectValue placeholder="Selecciona tu especialidad" />
-              </SelectTrigger>
-              <SelectContent>
-                {SPECIALTIES.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </section>
-          <section className="space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              4 · Ubicación
-            </span>
-            <div className="space-y-1.5">
-              <Label htmlFor="location" className="block text-sm font-medium text-foreground">
-                Ciudad, Provincia
-              </Label>
-              <Input
-                id="location"
-                placeholder="Ej: San Salvador de Jujuy, Jujuy"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-          </section>
-        </>
-      );
-    }
-
-    if (selected === 'gym') {
-      return (
-        <>
-          <section className="space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              2 · Datos del gimnasio
-            </span>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="gymName" className="block text-sm font-medium text-foreground">
-                  Nombre del gimnasio
-                </Label>
-                <Input
-                  id="gymName"
-                  placeholder="Nombre del establecimiento"
-                  value={gymName}
-                  onChange={(e) => setGymName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="location" className="block text-sm font-medium text-foreground">
-                  Ubicación
-                </Label>
-                <Input
-                  id="location"
-                  placeholder="Ej: San Salvador de Jujuy, Jujuy"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                />
-              </div>
-            </div>
-          </section>
-        </>
-      );
-    }
-
-    return null;
-  };
+  const roleLabel = ROLE_OPTIONS.find((r) => r.id === selected)?.label ?? '';
 
   if (!userLoaded) {
     return (
@@ -391,8 +276,11 @@ function OnboardingForm() {
         </p>
       </header>
 
+      <ProgressIndicator current={step} />
+
+      {/* STEP 1 — Rol */}
       {step === 1 && (
-        <section aria-label="Rol base" className="space-y-2">
+        <section aria-label="Rol base" className="space-y-3">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             1 · Elige tu rol base
           </span>
@@ -403,53 +291,239 @@ function OnboardingForm() {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setSelected(id)}
+                  onClick={() => { setSelected(id); clearError('role'); }}
                   className={cn(
                     'flex flex-col items-start gap-2 rounded-2xl border bg-[#0D0D0D] p-4 text-left transition-all duration-200',
                     isActive
                       ? 'border-[#EF4444] ring-2 ring-[#EF4444]/20 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
-                      : 'border-border hover:border-border-hover hover:bg-background-hover'
+                      : 'border-border hover:border-border-hover hover:bg-background-hover',
                   )}
                   aria-pressed={isActive}
                 >
-                  <Icon
-                    className={cn('h-5 w-5', isActive ? 'text-[#EF4444]' : 'text-muted-foreground')}
-                  />
+                  <Icon className={cn('h-5 w-5', isActive ? 'text-[#EF4444]' : 'text-muted-foreground')} />
                   <span className="text-sm font-semibold text-foreground">{label}</span>
                   <span className="text-xs leading-snug text-muted-foreground">{description}</span>
                 </button>
               );
             })}
           </div>
+
+          <Button
+            onClick={goNext}
+            disabled={!selected}
+            loading={false}
+            className="w-full"
+            size="lg"
+          >
+            Continuar
+            <ArrowRight className="h-4 w-4" />
+          </Button>
         </section>
       )}
 
+      {/* STEP 2 — Perfil */}
       {step === 2 && (
-        <>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleBack}
-            className="self-start gap-1 text-white/50 hover:text-white"
-          >
-            <ArrowRight className="h-4 w-4 rotate-180" />
-            Volver
-          </Button>
-          {getStepFields()}
-        </>
+        <section aria-label="Perfil" className="space-y-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            2 · Tu perfil
+          </span>
+
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className={cn(
+                'relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-all duration-200',
+                photo ? 'border-[#FBBF24]' : 'border-dashed border-border hover:border-border-hover',
+              )}
+              aria-label="Subir foto de perfil"
+            >
+              {photo ? (
+                <img src={photo} alt="Foto de perfil" className="h-full w-full object-cover" />
+              ) : (
+                <ImagePlus className="h-6 w-6 text-muted-foreground" />
+              )}
+            </button>
+            <div className="flex-1">
+              <Input
+                label="Nombre"
+                placeholder="Tu nombre"
+                value={firstName}
+                onChange={(e) => { setFirstName(e.target.value); clearError('firstName'); }}
+                error={!!errors.firstName}
+              />
+              {errors.firstName && <p className="text-xs text-[#EF4444]">{errors.firstName}</p>}
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="location" className="block text-sm font-medium text-foreground">
+              Ubicación
+            </Label>
+            <Input
+              id="location"
+              placeholder="Ej: San Salvador de Jujuy, Jujuy"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={goBack} className="gap-1 text-white/50 hover:text-white">
+              <ArrowLeft className="h-4 w-4" />
+              Volver
+            </Button>
+            <Button onClick={goNext} className="flex-1" size="lg">
+              Continuar
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </section>
       )}
 
-      {step === 2 && (
-        <Button
-          onClick={complete}
-          disabled={!selected || submitting}
-          loading={submitting}
-          className="w-full"
-          size="lg"
-        >
-          Completar registro
-          <ArrowRight className="h-4 w-4" />
-        </Button>
+      {/* STEP 3 — Detalles por rol */}
+      {step === 3 && (
+        <section aria-label="Detalles" className="space-y-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            3 · Detalles de {roleLabel}
+          </span>
+
+          {selected === 'player' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="age" className="block text-sm font-medium text-foreground">Edad</Label>
+                  <Input id="age" type="number" placeholder="Edad" value={age}
+                    onChange={(e) => { setAge(e.target.value); clearError('age'); }}
+                    error={!!errors.age} min={10} max={100} />
+                  {errors.age && <p className="text-xs text-[#EF4444]">{errors.age}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="weight" className="block text-sm font-medium text-foreground">Peso (kg)</Label>
+                  <Input id="weight" type="number" step="0.1" placeholder="70.5" value={weight}
+                    onChange={(e) => { setWeight(e.target.value); clearError('weight'); }}
+                    error={!!errors.weight} min={20} max={300} />
+                  {errors.weight && <p className="text-xs text-[#EF4444]">{errors.weight}</p>}
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label htmlFor="height" className="block text-sm font-medium text-foreground">Altura (cm)</Label>
+                  <Input id="height" type="number" placeholder="175" value={height}
+                    onChange={(e) => { setHeight(e.target.value); clearError('height'); }}
+                    error={!!errors.height} min={100} max={250} />
+                  {errors.height && <p className="text-xs text-[#EF4444]">{errors.height}</p>}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="gym" className="block text-sm font-medium text-foreground">Gimnasio base (opcional)</Label>
+                <Select value={selectedGym} onValueChange={setSelectedGym}>
+                  <SelectTrigger className="h-12 w-full" id="gym">
+                    <SelectValue placeholder="Selecciona tu gimnasio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GYM_OPTIONS.map((gym) => (
+                      <SelectItem key={gym.id} value={gym.id}>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium">{gym.name}</span>
+                          <span className="text-xs text-muted-foreground">{gym.country} - {gym.province}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+
+          {selected === 'coach' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="specialty" className="block text-sm font-medium text-foreground">Área de especialización</Label>
+              <Select value={specialty} onValueChange={(v) => { setSpecialty(v); clearError('specialty'); }}>
+                <SelectTrigger className="h-12 w-full" id="specialty">
+                  <SelectValue placeholder="Selecciona tu especialidad" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPECIALTIES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.specialty && <p className="text-xs text-[#EF4444]">{errors.specialty}</p>}
+            </div>
+          )}
+
+          {selected === 'gym' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="gymName" className="block text-sm font-medium text-foreground">Nombre del gimnasio</Label>
+              <Input id="gymName" placeholder="Nombre del establecimiento" value={gymName}
+                onChange={(e) => { setGymName(e.target.value); clearError('gymName'); }}
+                error={!!errors.gymName} />
+              {errors.gymName && <p className="text-xs text-[#EF4444]">{errors.gymName}</p>}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={goBack} className="gap-1 text-white/50 hover:text-white">
+              <ArrowLeft className="h-4 w-4" />
+              Volver
+            </Button>
+            <Button onClick={goNext} className="flex-1" size="lg">
+              Continuar
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </section>
+      )}
+
+      {/* STEP 4 — Confirmar */}
+      {step === 4 && (
+        <section aria-label="Confirmar" className="space-y-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            4 · Confirma tu información
+          </span>
+
+          <div className="rounded-2xl border border-border bg-[#0D0D0D] p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#FBBF24] bg-black">
+                {photo ? <img src={photo} alt="" className="h-full w-full object-cover" /> : null}
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">{firstName || '—'}</p>
+                <p className="text-xs text-muted-foreground">{roleLabel}</p>
+              </div>
+            </div>
+            <dl className="space-y-1.5 text-sm">
+              {location && (
+                <div className="flex justify-between"><dt className="text-muted-foreground">Ubicación</dt><dd className="text-foreground">{location}</dd></div>
+              )}
+              {selected === 'player' && (
+                <>
+                  {age && <div className="flex justify-between"><dt className="text-muted-foreground">Edad</dt><dd className="text-foreground">{age}</dd></div>}
+                  {weight && <div className="flex justify-between"><dt className="text-muted-foreground">Peso</dt><dd className="text-foreground">{weight} kg</dd></div>}
+                  {height && <div className="flex justify-between"><dt className="text-muted-foreground">Altura</dt><dd className="text-foreground">{height} cm</dd></div>}
+                  {selectedGym && <div className="flex justify-between"><dt className="text-muted-foreground">Gimnasio</dt><dd className="text-foreground">{GYM_OPTIONS.find((g) => g.id === selectedGym)?.name}</dd></div>}
+                </>
+              )}
+              {selected === 'coach' && specialty && (
+                <div className="flex justify-between"><dt className="text-muted-foreground">Especialidad</dt><dd className="text-foreground">{SPECIALTIES.find((s) => s.value === specialty)?.label}</dd></div>
+              )}
+              {selected === 'gym' && gymName && (
+                <div className="flex justify-between"><dt className="text-muted-foreground">Gimnasio</dt><dd className="text-foreground">{gymName}</dd></div>
+              )}
+            </dl>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={goBack} disabled={submitting} className="gap-1 text-white/50 hover:text-white">
+              <ArrowLeft className="h-4 w-4" />
+              Volver
+            </Button>
+            <Button onClick={submit} disabled={submitting} loading={submitting} className="flex-1" size="lg">
+              Completar registro
+              <Check className="h-4 w-4" />
+            </Button>
+          </div>
+        </section>
       )}
     </div>
   );
