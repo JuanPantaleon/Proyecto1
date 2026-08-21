@@ -27,36 +27,36 @@ interface NavItem {
 }
 
 const PLAYER_NAVIGATION: NavItem[] = [
-  { href: '/dashboard', label: 'Inicio', icon: Home },
-  { href: '/dashboard/entrenamiento', label: 'Entrenar', icon: Dumbbell },
-  { href: '/dashboard/temporizador', label: 'Tiempo', icon: Timer },
-  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/jugador', label: 'Inicio', icon: Home },
+  { href: '/dashboard/jugador/entrenamiento', label: 'Entrenar', icon: Dumbbell },
+  { href: '/dashboard/jugador/temporizador', label: 'Tiempo', icon: Timer },
+  { href: '/dashboard/jugador/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/jugador/comunidad', label: 'Social', icon: Users },
 ];
 
 const GYM_NAVIGATION: NavItem[] = [
-  { href: '/dashboard', label: 'Inicio', icon: Home },
-  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
-  { href: '/dashboard/jugadores', label: 'Jugadores', icon: Building2 },
+  { href: '/dashboard/gimnasio', label: 'Inicio', icon: Home },
+  { href: '/dashboard/gimnasio/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/gimnasio/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/gimnasio/jugadores', label: 'Jugadores', icon: Building2 },
 ];
 
 const COACH_NAVIGATION: NavItem[] = [
-  { href: '/dashboard', label: 'Inicio', icon: Home },
-  { href: '/dashboard/entrenamiento', label: 'Entrenamiento', icon: Dumbbell },
-  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
-  { href: '/dashboard/jugadores', label: 'Jugadores', icon: Building2 },
-  { href: '/dashboard/validar', label: 'Validar', icon: ScanLine },
-  { href: '/dashboard/ejercicios', label: 'Ejercicios', icon: ClipboardList },
+  { href: '/dashboard/entrenador', label: 'Inicio', icon: Home },
+  { href: '/dashboard/entrenador/entrenamiento', label: 'Entrenamiento', icon: Dumbbell },
+  { href: '/dashboard/entrenador/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/entrenador/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/entrenador/jugadores', label: 'Jugadores', icon: Building2 },
+  { href: '/dashboard/entrenador/validar', label: 'Validar', icon: ScanLine },
+  { href: '/dashboard/entrenador/ejercicios', label: 'Ejercicios', icon: ClipboardList },
 ];
 
 const ADMIN_NAVIGATION: NavItem[] = [
-  { href: '/dashboard', label: 'Inicio', icon: Home },
-  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
-  { href: '/dashboard/ejercicios', label: 'Ejercicios', icon: ClipboardList },
-  { href: '/dashboard/jugadores', label: 'Jugadores', icon: Building2 },
+  { href: '/dashboard/admin', label: 'Inicio', icon: Home },
+  { href: '/dashboard/admin/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/admin/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/admin/ejercicios', label: 'Ejercicios', icon: ClipboardList },
+  { href: '/dashboard/admin/jugadores', label: 'Jugadores', icon: Building2 },
 ];
 
 const NAVIGATION_BY_ROLE: Record<AppRole, NavItem[]> = {
@@ -66,41 +66,55 @@ const NAVIGATION_BY_ROLE: Record<AppRole, NavItem[]> = {
   admin: ADMIN_NAVIGATION,
 };
 
-const COACH_ONLY_PATHS = [
-  '/dashboard/entrenador/validar',
-  '/dashboard/entrenador/ejercicios',
-  '/dashboard/entrenador/jugadores',
-  '/dashboard/validar',
-  '/dashboard/ejercicios',
-];
-
-const GYM_ONLY_PATHS = ['/dashboard/gimnasio', '/dashboard/jugadores'];
-
-const STAFF_SHARED_PATHS = ['/dashboard/jugadores'];
+const PLAYER_ONLY_PATHS = ['/dashboard/jugador'];
+const COACH_ONLY_PATHS = ['/dashboard/entrenador'];
+const GYM_ONLY_PATHS = ['/dashboard/gimnasio'];
+const ADMIN_ONLY_PATHS = ['/dashboard/admin'];
+const SHARED_PATHS = ['/dashboard', '/dashboard/comunidad', '/dashboard/ranking', '/dashboard/perfil'];
 
 function matchesPath(pathname: string, paths: string[]) {
   return paths.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-function isForbidden(pathname: string, role: AppRole, isOwner: boolean) {
-  if (isOwner) return false;
-
-  if (role === 'player') {
-    return (
-      matchesPath(pathname, COACH_ONLY_PATHS) ||
-      matchesPath(pathname, GYM_ONLY_PATHS) ||
-      matchesPath(pathname, STAFF_SHARED_PATHS)
-    );
+function getAllowedPaths(role: AppRole, isOwner: boolean): string[] {
+  if (isOwner) return [];
+  
+  switch (role) {
+    case 'player':
+      return [...PLAYER_ONLY_PATHS, ...SHARED_PATHS];
+    case 'coach':
+      return [...COACH_ONLY_PATHS, ...SHARED_PATHS];
+    case 'gym':
+      return [...GYM_ONLY_PATHS, ...SHARED_PATHS];
+    case 'admin':
+      return [...ADMIN_ONLY_PATHS, ...SHARED_PATHS];
+    default:
+      return SHARED_PATHS;
   }
-  if (role === 'coach') {
-    return matchesPath(pathname, GYM_ONLY_PATHS);
-  }
-  if (role === 'gym') {
-    return matchesPath(pathname, COACH_ONLY_PATHS);
-  }
-  return false;
 }
- 
+
+function getBaseRoute(role: AppRole): string {
+  switch (role) {
+    case 'player':
+      return '/dashboard/jugador';
+    case 'coach':
+      return '/dashboard/entrenador';
+    case 'gym':
+      return '/dashboard/gimnasio';
+    case 'admin':
+      return '/dashboard/admin';
+    default:
+      return '/dashboard';
+  }
+}
+
+function isPathAllowed(pathname: string, role: AppRole, isOwner: boolean): boolean {
+  if (isOwner) return true;
+  
+  const allowedPaths = getAllowedPaths(role, isOwner);
+  return matchesPath(pathname, allowedPaths);
+}
+
 /** Guarda de rutas: impide acceso por URL directa a áreas que no corresponden al rol activo. */
 function RouteRoleGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -108,9 +122,10 @@ function RouteRoleGuard({ children }: { children: ReactNode }) {
   const { role, isOwner } = useRole();
 
   useEffect(() => {
-    if (pathname === '/dashboard') return;
-    if (isForbidden(pathname, role, isOwner)) {
-      router.replace('/dashboard');
+    if (pathname === '/dashboard' || pathname === '/dashboard/') return;
+    if (!isPathAllowed(pathname, role, isOwner)) {
+      const baseRoute = getBaseRoute(role);
+      router.replace(baseRoute);
     }
   }, [pathname, role, isOwner, router]);
 

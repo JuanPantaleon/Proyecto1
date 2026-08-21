@@ -98,7 +98,6 @@ export interface EcosystemState {
 }
 
 const STORAGE_KEY = 'ranked_fitness_active_profile';
-const OWNER_KEY = 'ranked_fitness_is_owner';
 const ECOSYSTEM_KEY = 'ranked_fitness_ecosystem';
 
 export const PLAYER_PROFILE: PlayerProfile = {
@@ -224,7 +223,6 @@ interface RoleContextValue {
   profile: AppProfile;
   isOwner: boolean;
   switchRole: (role: AppRole) => void;
-  setOwnerMode: (enabled: boolean) => void;
   updatePlayerProfile: (patch: Partial<PlayerProfile>) => void;
   /* Ecosistema compartido */
   players: EcosystemPlayer[];
@@ -272,13 +270,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     if (!token) {
-      // Modo demo (sin backend): el toggle local puede activar el modo Owner.
-      if (localStorage.getItem(OWNER_KEY) === 'true') setIsOwner(true);
+      setIsOwner(false);
       return;
     }
 
-    // Con token, el rol OWNER se verifica exclusivamente en el backend (/me).
-    // Cualquier manipulación local de `ranked_fitness_is_owner` se ignora.
     let cancelled = false;
     api
       .get<{ role?: string }>('/api/v1/auth/me')
@@ -328,15 +323,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       // almacenamiento no disponible
     }
   }, [ecosystem]);
-
-  useEffect(() => {
-    try {
-      if (isOwner) localStorage.setItem(OWNER_KEY, 'true');
-      else localStorage.removeItem(OWNER_KEY);
-    } catch {
-      // almacenamiento no disponible
-    }
-  }, [isOwner]);
 
   const acceptCoaching = useCallback((id: string) => {
     setEcosystem((prev) => {
@@ -450,7 +436,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         if (next === 'admin' && !isOwner) return;
         setRole(next);
       },
-      setOwnerMode: (enabled) => setIsOwner(enabled),
       updatePlayerProfile: (patch) =>
         setProfiles((prev) => ({
           ...prev,
