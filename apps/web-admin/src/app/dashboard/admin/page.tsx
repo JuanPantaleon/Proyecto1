@@ -19,8 +19,8 @@ export default function AdminDashboard() {
     { href: '/dashboard/admin/usuarios', label: 'Gestionar Usuarios', icon: Users, color: 'text-[#FBBF24]', desc: 'Ver, editar y eliminar usuarios' },
     { href: '/dashboard/admin/gimnasios', label: 'Gimnasios', icon: Building2, color: 'text-[#EF4444]', desc: 'Gestionar gimnasios y sedes' },
     { href: '/dashboard/admin/entrenadores', label: 'Entrenadores', icon: Users, color: 'text-[#FBBF24]', desc: 'Ver y gestionar entrenadores' },
-    { href: '/dashboard/admin/ejercicios', label: 'Catálogo Ejercicios', icon: Dumbbell, color: 'text-[#EF4444]', desc: 'Catálogo global de ejercicios' },
-    { href: '/dashboard/admin/ranking', label: 'Ranking Global', icon: Trophy, color: 'text-[#FBBF24]', desc: 'Ranking global de todos los atletas' },
+    { href: '/dashboard/entrenador/ejercicios', label: 'Catálogo Ejercicios', icon: Dumbbell, color: 'text-[#EF4444]', desc: 'Catálogo global de ejercicios' },
+    { href: '/dashboard/ranking', label: 'Ranking Global', icon: Trophy, color: 'text-[#FBBF24]', desc: 'Ranking global de todos los atletas' },
     { href: '/dashboard/admin/configuracion', label: 'Configuración', icon: Settings, color: 'text-[#EF4444]', desc: 'Configuración global de la plataforma' },
   ];
 

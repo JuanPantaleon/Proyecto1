@@ -69,7 +69,7 @@ export default function GimnasioDashboard() {
 
           {/* Ranking del Gimnasio */}
           <Link
-            href="/dashboard/gimnasio/ranking"
+            href="/dashboard/ranking"
             className="group rounded-3xl border border-white/10 bg-[#0D0D0D] p-6 transition-all hover:border-[#FBBF24]/40 hover:shadow-[0_0_30px_rgba(251,191,36,0.1)]"
           >
             <div className="flex items-center justify-between">

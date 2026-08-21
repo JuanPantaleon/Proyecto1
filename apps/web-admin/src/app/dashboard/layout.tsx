@@ -17,6 +17,7 @@ import {
   ScanLine,
   Building2,
   ClipboardList,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,24 +29,27 @@ interface NavItem {
 
 const PLAYER_NAVIGATION: NavItem[] = [
   { href: '/dashboard/jugador', label: 'Inicio', icon: Home },
-  { href: '/dashboard/jugador/entrenamiento', label: 'Entrenar', icon: Dumbbell },
-  { href: '/dashboard/jugador/temporizador', label: 'Tiempo', icon: Timer },
-  { href: '/dashboard/jugador/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/jugador/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/entrenamiento', label: 'Entrenar', icon: Dumbbell },
+  { href: '/dashboard/temporizador', label: 'Tiempo', icon: Timer },
+  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
 ];
 
 const GYM_NAVIGATION: NavItem[] = [
   { href: '/dashboard/gimnasio', label: 'Inicio', icon: Home },
-  { href: '/dashboard/gimnasio/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/gimnasio/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
   { href: '/dashboard/gimnasio/jugadores', label: 'Jugadores', icon: Building2 },
+  { href: '/dashboard/gimnasio/rutinas', label: 'Rutinas', icon: ClipboardList },
+  { href: '/dashboard/gimnasio/entrenadores', label: 'Entrenadores', icon: Users },
+  { href: '/dashboard/gimnasio/configuracion', label: 'Ajustes', icon: Settings },
 ];
 
 const COACH_NAVIGATION: NavItem[] = [
   { href: '/dashboard/entrenador', label: 'Inicio', icon: Home },
-  { href: '/dashboard/entrenador/entrenamiento', label: 'Entrenamiento', icon: Dumbbell },
-  { href: '/dashboard/entrenador/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/entrenador/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/entrenamiento', label: 'Entrenamiento', icon: Dumbbell },
+  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
   { href: '/dashboard/entrenador/jugadores', label: 'Jugadores', icon: Building2 },
   { href: '/dashboard/entrenador/validar', label: 'Validar', icon: ScanLine },
   { href: '/dashboard/entrenador/ejercicios', label: 'Ejercicios', icon: ClipboardList },
@@ -53,10 +57,10 @@ const COACH_NAVIGATION: NavItem[] = [
 
 const ADMIN_NAVIGATION: NavItem[] = [
   { href: '/dashboard/admin', label: 'Inicio', icon: Home },
-  { href: '/dashboard/admin/ranking', label: 'Ranking', icon: Trophy },
-  { href: '/dashboard/admin/comunidad', label: 'Social', icon: Users },
-  { href: '/dashboard/admin/ejercicios', label: 'Ejercicios', icon: ClipboardList },
-  { href: '/dashboard/admin/jugadores', label: 'Jugadores', icon: Building2 },
+  { href: '/dashboard/ranking', label: 'Ranking', icon: Trophy },
+  { href: '/dashboard/comunidad', label: 'Social', icon: Users },
+  { href: '/dashboard/entrenador/ejercicios', label: 'Ejercicios', icon: ClipboardList },
+  { href: '/dashboard/jugadores', label: 'Jugadores', icon: Building2 },
 ];
 
 const NAVIGATION_BY_ROLE: Record<AppRole, NavItem[]> = {
@@ -66,53 +70,41 @@ const NAVIGATION_BY_ROLE: Record<AppRole, NavItem[]> = {
   admin: ADMIN_NAVIGATION,
 };
 
-const PLAYER_ONLY_PATHS = ['/dashboard/jugador'];
-const COACH_ONLY_PATHS = ['/dashboard/entrenador'];
-const GYM_ONLY_PATHS = ['/dashboard/gimnasio'];
-const ADMIN_ONLY_PATHS = ['/dashboard/admin'];
-const SHARED_PATHS = ['/dashboard', '/dashboard/comunidad', '/dashboard/ranking', '/dashboard/perfil'];
+const ROLE_BASE: Record<AppRole, string> = {
+  player: '/dashboard/jugador',
+  coach: '/dashboard/entrenador',
+  gym: '/dashboard/gimnasio',
+  admin: '/dashboard/admin',
+};
 
-function matchesPath(pathname: string, paths: string[]) {
-  return paths.some((p) => pathname === p || pathname.startsWith(p + '/'));
-}
+// Rutas compartidas por todos los roles (features globales existentes).
+const SHARED_PREFIXES = [
+  '/dashboard/comunidad',
+  '/dashboard/ranking',
+  '/dashboard/perfil',
+  '/dashboard/entrenamiento',
+  '/dashboard/temporizador',
+  '/dashboard/jugadores',
+];
 
-function getAllowedPaths(role: AppRole, isOwner: boolean): string[] {
-  if (isOwner) return [];
-  
-  switch (role) {
-    case 'player':
-      return [...PLAYER_ONLY_PATHS, ...SHARED_PATHS];
-    case 'coach':
-      return [...COACH_ONLY_PATHS, ...SHARED_PATHS];
-    case 'gym':
-      return [...GYM_ONLY_PATHS, ...SHARED_PATHS];
-    case 'admin':
-      return [...ADMIN_ONLY_PATHS, ...SHARED_PATHS];
-    default:
-      return SHARED_PATHS;
+function getAllowedPaths(role: AppRole, isOwner: boolean): string[] | null {
+  if (isOwner) return null; // el owner puede acceder a todo
+  const allowed = [ROLE_BASE[role], ...SHARED_PREFIXES];
+  // El admin supervisa también las áreas de entrenador y gimnasio.
+  if (role === 'admin') {
+    allowed.push('/dashboard/entrenador', '/dashboard/gimnasio');
   }
+  return allowed;
 }
 
-function getBaseRoute(role: AppRole): string {
-  switch (role) {
-    case 'player':
-      return '/dashboard/jugador';
-    case 'coach':
-      return '/dashboard/entrenador';
-    case 'gym':
-      return '/dashboard/gimnasio';
-    case 'admin':
-      return '/dashboard/admin';
-    default:
-      return '/dashboard';
-  }
-}
-
+// El dispatcher (/dashboard) se permite exactamente; sus sub-rutas NO son
+// compartidas, para evitar que cualquier rol acceda a áreas ajenas por URL.
 function isPathAllowed(pathname: string, role: AppRole, isOwner: boolean): boolean {
   if (isOwner) return true;
-  
-  const allowedPaths = getAllowedPaths(role, isOwner);
-  return matchesPath(pathname, allowedPaths);
+  if (pathname === '/dashboard' || pathname === '/dashboard/') return true;
+  const allowed = getAllowedPaths(role, isOwner);
+  if (!allowed) return true;
+  return allowed.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
 /** Guarda de rutas: impide acceso por URL directa a áreas que no corresponden al rol activo. */
@@ -122,9 +114,8 @@ function RouteRoleGuard({ children }: { children: ReactNode }) {
   const { role, isOwner } = useRole();
 
   useEffect(() => {
-    if (pathname === '/dashboard' || pathname === '/dashboard/') return;
     if (!isPathAllowed(pathname, role, isOwner)) {
-      const baseRoute = getBaseRoute(role);
+      const baseRoute = ROLE_BASE[role] ?? '/dashboard';
       router.replace(baseRoute);
     }
   }, [pathname, role, isOwner, router]);

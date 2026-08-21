@@ -18,7 +18,7 @@ export default function EntrenadorDashboard() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {/* Mis Programas */}
           <Link
-            href="/dashboard/entrenador/entrenamiento"
+            href="/dashboard/entrenamiento"
             className="group rounded-3xl border border-white/10 bg-[#0D0D0D] p-6 transition-all hover:border-[#EF4444]/40 hover:shadow-[0_0_30px_rgba(239,68,68,0.1)]"
           >
             <div className="flex items-center justify-between">
@@ -86,7 +86,7 @@ export default function EntrenadorDashboard() {
 
           {/* Ranking */}
           <Link
-            href="/dashboard/entrenador/ranking"
+            href="/dashboard/ranking"
             className="group rounded-3xl border border-white/10 bg-[#0D0D0D] p-6 transition-all hover:border-[#FBBF24]/40 hover:shadow-[0_0_30px_rgba(251,191,36,0.1)]"
           >
             <div className="flex items-center justify-between">
@@ -103,7 +103,7 @@ export default function EntrenadorDashboard() {
 
           {/* Comunidad */}
           <Link
-            href="/dashboard/entrenador/comunidad"
+            href="/dashboard/comunidad"
             className="group rounded-3xl border border-white/10 bg-[#0D0D0D] p-6 transition-all hover:border-white/20"
           >
             <div className="flex items-center justify-between">
