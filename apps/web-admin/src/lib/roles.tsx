@@ -14,6 +14,19 @@ import { api } from '@/lib/api';
 
 export type AppRole = 'player' | 'gym' | 'coach' | 'admin';
 
+// Mapea el rol persistido en el backend (Prisma Role) al rol de la app.
+const BACKEND_ROLE_TO_APP: Record<string, AppRole> = {
+  USER: 'player',
+  TRAINER: 'coach',
+  GYM_ADMIN: 'gym',
+  OWNER: 'admin',
+};
+
+function mapBackendRole(role?: string): AppRole | null {
+  if (!role) return null;
+  return BACKEND_ROLE_TO_APP[role] ?? null;
+}
+
 export interface PlayerProfile {
   id: string;
   email: string;
@@ -223,6 +236,7 @@ interface RoleContextValue {
   role: AppRole;
   profile: AppProfile;
   isOwner: boolean;
+  roleReady: boolean;
   switchRole: (role: AppRole) => void;
   updatePlayerProfile: (patch: Partial<PlayerProfile>) => void;
   /* Ecosistema compartido */
@@ -244,6 +258,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<Record<AppRole, AppProfile>>(DEFAULT_PROFILES);
   const [role, setRole] = useState<AppRole>('player');
   const [isOwner, setIsOwner] = useState(false);
+  const [roleReady, setRoleReady] = useState(false);
   const [ecosystem, setEcosystem] = useState<EcosystemState>(() => loadEcosystem());
   const { isLoaded, isSignedIn } = useAuth();
 
@@ -275,17 +290,22 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     if (!token) {
       setIsOwner(false);
+      setRoleReady(true);
       return;
     }
 
     let cancelled = false;
     api
-      .get<{ role?: string }>('/api/v1/auth/me')
+      .get<{ role?: string; isOnboarded?: boolean }>('/api/v1/auth/me')
       .then((me) => {
         if (!cancelled) {
           const isOwnerResult = me?.role === 'OWNER';
           console.log('[RoleProvider] OWNER check result:', { role: me?.role, isOwner: isOwnerResult });
           setIsOwner(isOwnerResult);
+          // El backend es la fuente de verdad del rol base del usuario.
+          const mapped = mapBackendRole(me?.role);
+          if (mapped) setRole(mapped);
+          setRoleReady(true);
         }
       })
       .catch((error) => {
@@ -304,6 +324,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             // Si hay sesión en Clerk, NO redirigir - dejar que OnboardingGate maneje
           }
           setIsOwner(false);
+          setRoleReady(true);
         }
       });
     return () => {
@@ -442,6 +463,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       role,
       profile: derivedProfiles[role],
       isOwner,
+      roleReady,
       switchRole: (next) => {
         if (next === 'admin' && !isOwner) return;
         setRole(next);
@@ -466,6 +488,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     role,
     profiles,
     isOwner,
+    roleReady,
     ecosystem,
     acceptCoaching,
     rejectCoaching,

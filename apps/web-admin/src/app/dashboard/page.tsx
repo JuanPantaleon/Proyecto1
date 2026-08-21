@@ -30,7 +30,7 @@ const ROLE_DESCRIPTIONS = {
 export default function DashboardDispatcher() {
   const router = useRouter();
   const { isLoaded, isSignedIn } = useAuth();
-  const { role, isOwner } = useRole();
+  const { role, isOwner, roleReady } = useRole();
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [checked, setChecked] = useState(false);
 
@@ -64,7 +64,7 @@ export default function DashboardDispatcher() {
 
     // No decidimos nada hasta haber consultado /me (evita un redirect
     // prematuro a /onboarding mientras isOnboarded arranca en false).
-    if (!checked) return;
+    if (!checked || !roleReady) return;
 
     // Si NO hay sesión en Clerk → a sign-in (el middleware de Clerk lo maneja)
     if (!isSignedIn) {
@@ -80,7 +80,7 @@ export default function DashboardDispatcher() {
 
     // HAY sesión en Clerk Y está onboarded → decidimos a dónde ir según rol
     if (isOwner) {
-      router.replace('/dashboard/owner');
+      router.replace('/dashboard/admin');
       return;
     }
 
