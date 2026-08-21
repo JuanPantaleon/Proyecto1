@@ -283,10 +283,23 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     api
       .get<{ role?: string }>('/api/v1/auth/me')
       .then((me) => {
-        if (!cancelled) setIsOwner(me?.role === 'OWNER');
+        if (!cancelled) {
+          const isOwnerResult = me?.role === 'OWNER';
+          console.log('[RoleProvider] OWNER check result:', { role: me?.role, isOwner: isOwnerResult });
+          setIsOwner(isOwnerResult);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setIsOwner(false);
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('[RoleProvider] Failed to verify OWNER role:', error);
+          if (error?.response?.status === 401) {
+            localStorage.removeItem('auth_token');
+            if (typeof window !== 'undefined') {
+              window.location.href = '/sign-in';
+            }
+          }
+          setIsOwner(false);
+        }
       });
     return () => {
       cancelled = true;

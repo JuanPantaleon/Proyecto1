@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { RoleProvider, useRole, type AppRole } from '@/lib/roles';
 import { OwnerRoleIsland } from '@/components/layout/owner-role-island';
 import { OnboardingGate } from '@/components/layout/onboarding-gate';
+import { UserButton } from '@clerk/nextjs';
 import {
   Home,
   Dumbbell,
@@ -73,7 +74,7 @@ const COACH_ONLY_PATHS = [
   '/dashboard/ejercicios',
 ];
 
-const GYM_ONLY_PATHS = ['/dashboard/gimnasio'];
+const GYM_ONLY_PATHS = ['/dashboard/gimnasio', '/dashboard/jugadores'];
 
 const STAFF_SHARED_PATHS = ['/dashboard/jugadores'];
 
@@ -81,7 +82,9 @@ function matchesPath(pathname: string, paths: string[]) {
   return paths.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-function isForbidden(pathname: string, role: AppRole) {
+function isForbidden(pathname: string, role: AppRole, isOwner: boolean) {
+  if (isOwner) return false;
+
   if (role === 'player') {
     return (
       matchesPath(pathname, COACH_ONLY_PATHS) ||
@@ -89,11 +92,15 @@ function isForbidden(pathname: string, role: AppRole) {
       matchesPath(pathname, STAFF_SHARED_PATHS)
     );
   }
-  if (role === 'coach') return matchesPath(pathname, GYM_ONLY_PATHS);
-  if (role === 'gym') return matchesPath(pathname, COACH_ONLY_PATHS);
+  if (role === 'coach') {
+    return matchesPath(pathname, GYM_ONLY_PATHS);
+  }
+  if (role === 'gym') {
+    return matchesPath(pathname, COACH_ONLY_PATHS);
+  }
   return false;
 }
-
+ 
 /** Guarda de rutas: impide acceso por URL directa a áreas que no corresponden al rol activo. */
 function RouteRoleGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -101,9 +108,8 @@ function RouteRoleGuard({ children }: { children: ReactNode }) {
   const { role, isOwner } = useRole();
 
   useEffect(() => {
-    if (isOwner) return;
     if (pathname === '/dashboard') return;
-    if (isForbidden(pathname, role)) {
+    if (isForbidden(pathname, role, isOwner)) {
       router.replace('/dashboard');
     }
   }, [pathname, role, isOwner, router]);
@@ -183,6 +189,17 @@ export default function DashboardLayout({
 
             {/* Owner mini-isla flotante superior */}
             <OwnerRoleIsland />
+
+            {/* User Button (Logout / Account Settings) */}
+            <div className="fixed top-4 right-6 z-50">
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: 'w-10 h-10 border-2 border-white/10 shadow-lg',
+                  },
+                }}
+              />
+            </div>
 
             {/* Main content area */}
             <main className="flex-1 overflow-hidden relative pb-28 flex flex-col px-4 pt-6">
