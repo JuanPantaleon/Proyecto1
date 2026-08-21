@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { clerkClient } from '@clerk/clerk-sdk-node';
 import type { CompleteOnboardingDto } from '@ranked-fitness/shared';
 
 const BASE_ROLE_TO_DB: Record<CompleteOnboardingDto['role'], 'USER' | 'TRAINER' | 'GYM_ADMIN'> = {
@@ -88,6 +89,41 @@ export class AuthService {
     return this.prisma.user.update({
       where: { clerkId },
       data,
+    });
+  }
+
+  /**
+   * Devuelve el usuario de la BD por clerkId, creándolo on-demand si no existe.
+   * Esto hace el flujo resiliente aunque el webhook de Clerk tarde o falle:
+   * /me y /onboarding funcionan igual tras el primer inicio de sesión.
+   */
+  async ensureUser(clerkId: string) {
+    const existing = await this.prisma.user.findUnique({ where: { clerkId } });
+    if (existing) return existing;
+
+    let clerkUser: any;
+    try {
+      clerkUser = await clerkClient.users.getUser(clerkId);
+    } catch {
+      throw new UnauthorizedException('No se pudo resolver el usuario en Clerk');
+    }
+
+    const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? null;
+    const isRoot = isRootEmail(email);
+
+    return this.prisma.user.create({
+      data: {
+        clerkId,
+        email,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+        imageUrl: clerkUser.imageUrl,
+        currentWeightKg: 0,
+        heightCm: 0,
+        streakDays: 0,
+        role: isRoot ? 'OWNER' : 'USER',
+        isOnboarded: false,
+      },
     });
   }
 

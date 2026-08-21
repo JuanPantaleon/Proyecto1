@@ -43,7 +43,7 @@ export function ISGMetricsModal({ open, onOpenChange, onComplete }: ISGMetricsMo
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
       if (token) {
-        await api.put('/api/v1/users/me', { currentWeightKg: w, heightCm: Math.round(h) });
+        await api.put('/api/v1/auth/users/me', { currentWeightKg: w, heightCm: Math.round(h) });
       }
       updatePlayerProfile({ weightKg: w, heightCm: Math.round(h) });
       success('¡Perfil actualizado!', 'Tu peso y altura se guardaron correctamente. Ya podemos calcular tu ISG con precisión.');

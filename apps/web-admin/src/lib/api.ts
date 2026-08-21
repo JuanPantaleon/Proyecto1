@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import type { MetricType, SetType } from '@ranked-fitness/shared';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 const ACTIVE_VIEW_HEADER: Record<string, 'PLAYER' | 'COACH' | 'GYM' | 'ADMIN'> = {
   player: 'PLAYER',

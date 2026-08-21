@@ -1,10 +1,10 @@
-import { Controller, Post, Req, UseGuards, Get, Body } from '@nestjs/common';
+import { Controller, Post, Req, UseGuards, Get, Body, Put } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { completeOnboardingSchema } from '@ranked-fitness/shared';
+import { completeOnboardingSchema, updateUserSchema } from '@ranked-fitness/shared';
 import type { CompleteOnboardingDto } from '@ranked-fitness/shared';
 
 @ApiTags('auth')
@@ -35,5 +35,16 @@ export class AuthController {
     @Body(new ZodValidationPipe(completeOnboardingSchema)) dto: CompleteOnboardingDto,
   ) {
     return this.authService.completeOnboarding(user.clerkId, dto);
+  }
+
+  @Put('users/me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Actualizar peso/altura del usuario actual' })
+  async updateProfile(
+    @CurrentUser() user: any,
+    @Body(new ZodValidationPipe(updateUserSchema)) body: { currentWeightKg?: number; heightCm?: number },
+  ) {
+    return this.authService.updateUserProfile(user.clerkId, body);
   }
 }
