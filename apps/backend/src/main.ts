@@ -31,6 +31,11 @@ async function bootstrap() {
   );
   app.use(express.urlencoded({ extended: true }));
 
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.use((err: any, _req: any, res: any, _next: any) => {
+    res.status(500).json({ __mwErr: true, message: err?.message, stack: err?.stack });
+  });
+
   // CORS: acepta el dominio de Vercel (CORS_ORIGINS) + localhost para desarrollo.
   app.enableCors({
     origin: corsOrigins(),
