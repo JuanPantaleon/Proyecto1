@@ -59,6 +59,8 @@ export class AuthService {
       });
     }
 
+    // NUEVO USUARIO: crear SIN onboarding completado y SIN rol asignado
+    // El rol se asignará al completar el onboarding (PLAYER/COACH/GYM)
     return this.prisma.user.create({
       data: {
         clerkId: clerkUser.id,
@@ -69,8 +71,8 @@ export class AuthService {
         currentWeightKg: 0,
         heightCm: 0,
         streakDays: 0,
-        role: isRoot ? 'OWNER' : 'USER',
-        isOnboarded: isRoot,
+        role: 'USER',        // Rol base genérico hasta onboarding
+        isOnboarded: false,  // IMPORTANTE: false para forzar onboarding
       },
     });
   }

@@ -6,6 +6,11 @@ import { useAuth } from '@clerk/nextjs';
 import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
+interface UserProfile {
+  isOnboarded?: boolean;
+  role?: string;
+}
+
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { isLoaded, isSignedIn } = useAuth();
@@ -34,13 +39,17 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
     setChecking(true);
 
     api
-      .get<{ isOnboarded?: boolean }>('/api/v1/auth/me')
+      .get<UserProfile>('/api/v1/auth/me')
       .then((me) => {
         if (cancelled) return;
-        if (me?.isOnboarded) {
+        
+        // Usuario está onboarded si: isOnboarded === true Y role NO es 'USER' (rol base sin asignar)
+        const isFullyOnboarded = me?.isOnboarded === true && me?.role !== 'USER';
+        
+        if (isFullyOnboarded) {
           localStorage.setItem('ranked_fitness_onboarded', 'true');
         } else {
-          // Usuario existe en Clerk pero no está onboarded → a onboarding
+          // Usuario existe en Clerk pero no está onboarded o no tiene rol asignado → a onboarding
           router.replace('/onboarding');
         }
       })

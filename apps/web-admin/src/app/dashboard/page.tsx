@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { Loader2, User, Building2, GraduationCap, Crown } from 'lucide-react';
@@ -31,9 +31,33 @@ export default function DashboardDispatcher() {
   const router = useRouter();
   const { isLoaded, isSignedIn } = useAuth();
   const { role, isOwner } = useRole();
+  const [isOnboarded, setIsOnboarded] = useState(false);
+
+  // Verificar estado de onboarding al cargar
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+
+    // Primero verificamos el localStorage como cache rápido
+    const cachedOnboarded = localStorage.getItem('ranked_fitness_onboarded') === 'true';
+    setIsOnboarded(cachedOnboarded);
+
+    // Luego verificamos con el backend para confirmar
+    import('@/lib/api').then(({ api }) => {
+      api.get<{ isOnboarded?: boolean; role?: string }>('/api/v1/auth/me')
+        .then((me) => {
+          const fullyOnboarded = me?.isOnboarded === true && me?.role !== 'USER';
+          setIsOnboarded(fullyOnboarded);
+          localStorage.setItem('ranked_fitness_onboarded', String(fullyOnboarded));
+        })
+        .catch(() => {
+          // Si falla, asumimos no onboarded por seguridad
+          setIsOnboarded(false);
+        });
+    });
+  }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !isSignedIn) return;
 
     // Si NO hay sesión en Clerk → a sign-in (el middleware de Clerk lo maneja)
     if (!isSignedIn) {
@@ -41,7 +65,13 @@ export default function DashboardDispatcher() {
       return;
     }
 
-    // HAY sesión en Clerk → decidimos a dónde ir según rol/onboarding
+    // Esperamos a que se verifique el onboarding
+    if (!isOnboarded) {
+      router.replace('/onboarding');
+      return;
+    }
+
+    // HAY sesión en Clerk Y está onboarded → decidimos a dónde ir según rol
     if (isOwner) {
       router.replace('/dashboard/owner');
       return;
@@ -64,7 +94,7 @@ export default function DashboardDispatcher() {
         // Usuario logueado en Clerk pero sin rol asignado → a onboarding
         router.replace('/onboarding');
     }
-  }, [role, isOwner, isLoaded, isSignedIn, router]);
+  }, [role, isOwner, isLoaded, isSignedIn, isOnboarded, router]);
 
   const Icon = role && ROLE_ICONS[role as keyof typeof ROLE_ICONS] ? ROLE_ICONS[role as keyof typeof ROLE_ICONS] : Loader2;
 
