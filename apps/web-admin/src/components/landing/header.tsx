@@ -25,10 +25,10 @@ export function Header() {
           <Link href="#entrenadores" className="text-gray-300 hover:text-white transition-colors">Entrenadores</Link>
         </nav>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => window.location.href = 'https://moved-possum-7025.accounts.dev/sign-in'}>
+          <Button variant="ghost" size="sm" onClick={() => window.location.href = '/sign-in'}>
             Ingresar
           </Button>
-          <Button size="sm" onClick={() => window.location.href = 'https://moved-possum-7025.accounts.dev/sign-up'}>
+          <Button size="sm" onClick={() => window.location.href = '/sign-up'}>
             Unirse
           </Button>
         </div>
