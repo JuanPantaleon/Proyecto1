@@ -144,6 +144,9 @@ export class AuthService {
         ...(dto.imageUrl ? { imageUrl: dto.imageUrl } : {}),
         ...(dto.currentWeightKg != null ? { currentWeightKg: dto.currentWeightKg } : {}),
         ...(dto.heightCm != null ? { heightCm: dto.heightCm } : {}),
+        ...(dto.country ? { locationCountry: dto.country } : {}),
+        ...(dto.province ? { locationProvince: dto.province } : {}),
+        ...(dto.city ? { locationCity: dto.city } : {}),
       },
     });
   }

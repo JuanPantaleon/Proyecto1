@@ -45,6 +45,46 @@ const GYM_OPTIONS = [
   { id: 'gym-pantafit', name: 'Pantafit', country: 'Argentina', province: 'Jujuy' },
 ];
 
+const COUNTRIES = [
+  'Argentina',
+  'Bolivia',
+  'Chile',
+  'Colombia',
+  'Ecuador',
+  'Paraguay',
+  'Perú',
+  'Uruguay',
+  'España',
+  'México',
+  'Otro',
+];
+
+const ARGENTINE_PROVINCES = [
+  'Buenos Aires',
+  'Catamarca',
+  'Chaco',
+  'Chubut',
+  'Córdoba',
+  'Corrientes',
+  'Entre Ríos',
+  'Formosa',
+  'Jujuy',
+  'La Pampa',
+  'La Rioja',
+  'Mendoza',
+  'Misiones',
+  'Neuquén',
+  'Río Negro',
+  'Salta',
+  'San Juan',
+  'San Luis',
+  'Santa Cruz',
+  'Santa Fe',
+  'Santiago del Estero',
+  'Tierra del Fuego',
+  'Tucumán',
+];
+
 const SPECIALTIES = [
   { value: 'strength', label: 'Fuerza y Potencia' },
   { value: 'hypertrophy', label: 'Hipertrofia' },
@@ -134,7 +174,9 @@ function OnboardingForm() {
   const [selected, setSelected] = useState<AppRole | null>(null);
   const [firstName, setFirstName] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
-  const [location, setLocation] = useState('');
+  const [country, setCountry] = useState('Argentina');
+  const [province, setProvince] = useState('');
+  const [city, setCity] = useState('');
   const [selectedGym, setSelectedGym] = useState('');
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
@@ -221,14 +263,20 @@ function OnboardingForm() {
         // CRÍTICO: el backend espera 'currentWeightKg', NO 'weightKg'.
         payload.currentWeightKg = weight ? parseFloat(weight) : undefined;
         payload.heightCm = height ? parseInt(height, 10) : undefined;
-        payload.location = location.trim() || undefined;
+        payload.country = country.trim() || undefined;
+        payload.province = province.trim() || undefined;
+        payload.city = city.trim() || undefined;
         if (selectedGym) payload.gymId = selectedGym;
       } else if (selected === 'coach') {
         payload.specialty = specialty || undefined;
-        payload.location = location.trim() || undefined;
+        payload.country = country.trim() || undefined;
+        payload.province = province.trim() || undefined;
+        payload.city = city.trim() || undefined;
       } else if (selected === 'gym') {
         payload.gymName = gymName.trim() || undefined;
-        payload.location = location.trim() || undefined;
+        payload.country = country.trim() || undefined;
+        payload.province = province.trim() || undefined;
+        payload.city = city.trim() || undefined;
       }
 
       await api.post('/api/v1/auth/onboarding', payload);
@@ -358,14 +406,62 @@ function OnboardingForm() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="location" className="block text-sm font-medium text-foreground">
-              Ubicación
+            <Label htmlFor="country" className="block text-sm font-medium text-foreground">
+              País
+            </Label>
+            <Select value={country} onValueChange={setCountry}>
+              <SelectTrigger id="country">
+                <SelectValue placeholder="Selecciona país" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="province" className="block text-sm font-medium text-foreground">
+              Provincia
+            </Label>
+            {country === 'Argentina' ? (
+              <Select
+                value={province}
+                onValueChange={setProvince}
+              >
+                <SelectTrigger id="province">
+                  <SelectValue placeholder="Selecciona provincia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ARGENTINE_PROVINCES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id="province"
+                placeholder="Provincia"
+                value={province}
+                onChange={(e) => setProvince(e.target.value)}
+              />
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="city" className="block text-sm font-medium text-foreground">
+              Ciudad
             </Label>
             <Input
-              id="location"
-              placeholder="Ej: San Salvador de Jujuy, Jujuy"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              id="city"
+              placeholder="Ej: San Salvador de Jujuy"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
             />
           </div>
 
@@ -493,8 +589,8 @@ function OnboardingForm() {
               </div>
             </div>
             <dl className="space-y-1.5 text-sm">
-              {location && (
-                <div className="flex justify-between"><dt className="text-muted-foreground">Ubicación</dt><dd className="text-foreground">{location}</dd></div>
+              {(country || province || city) && (
+                <div className="flex justify-between"><dt className="text-muted-foreground">Ubicación</dt><dd className="text-foreground">{[city, province, country].filter(Boolean).join(', ')}</dd></div>
               )}
               {selected === 'player' && (
                 <>

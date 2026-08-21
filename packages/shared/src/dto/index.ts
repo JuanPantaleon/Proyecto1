@@ -23,6 +23,9 @@ export const completeOnboardingSchema = z.object({
   imageUrl: z.string().url().or(z.literal('')).optional(),
   currentWeightKg: z.number().positive().max(500).optional(),
   heightCm: z.number().int().positive().max(300).optional(),
+  country: z.string().trim().min(1).max(100).optional(),
+  province: z.string().trim().min(1).max(100).optional(),
+  city: z.string().trim().min(1).max(100).optional(),
 });
 
 const exerciseBaseSchema = z.object({
