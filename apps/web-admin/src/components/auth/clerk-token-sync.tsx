@@ -19,7 +19,7 @@ export function ClerkTokenSync() {
 
     async function syncToken() {
       try {
-        const token = await getToken({ template: 'backend' });
+        const token = await getToken();
         if (!cancelled) {
           if (token) {
             api.setToken(token);

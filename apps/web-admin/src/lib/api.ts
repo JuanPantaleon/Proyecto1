@@ -34,11 +34,19 @@ class ApiClient {
     });
 
     this.client.interceptors.request.use(
-      (config: InternalAxiosRequestConfig) => {
+      async (config: InternalAxiosRequestConfig) => {
         if (typeof window !== 'undefined') {
-          const token = localStorage.getItem('auth_token');
-          if (token && config.headers) {
-            config.headers.Authorization = `Bearer ${token}`;
+          try {
+            const clerk = (window as any).Clerk;
+            if (clerk?.session) {
+              const token = await clerk.session.getToken();
+              if (token && config.headers) {
+                config.headers.Authorization = `Bearer ${token}`;
+              }
+            }
+          } catch {
+            // Sin token: la petición irá sin Authorization y el backend
+            // responderá 401, que es manejado por los guards (OnboardingGate).
           }
           const activeView = getActiveViewHeader();
           if (activeView && config.headers) {
@@ -53,12 +61,11 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('auth_token');
-            window.location.href = '/sign-in';
-          }
-        }
+        // NOTA: no redirigimos automáticamente a /sign-in aquí. Esa lógica
+        // causaba un bucle infinito (dashboard <-> sign-in) cuando faltaba el
+        // token, porque Clerk (sesión viva) rebotaba de vuelta a /dashboard.
+        // Los guards del cliente (OnboardingGate / DashboardDispatcher) ya
+        // derivan a /onboarding o /sign-in según corresponda.
         return Promise.reject(error);
       }
     );

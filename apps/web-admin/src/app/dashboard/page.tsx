@@ -32,6 +32,7 @@ export default function DashboardDispatcher() {
   const { isLoaded, isSignedIn } = useAuth();
   const { role, isOwner } = useRole();
   const [isOnboarded, setIsOnboarded] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   // Verificar estado de onboarding al cargar (SOLO el backend es fuente de verdad)
   useEffect(() => {
@@ -51,12 +52,19 @@ export default function DashboardDispatcher() {
           // Si falla, asumimos no onboarded por seguridad
           setIsOnboarded(false);
           localStorage.setItem('ranked_fitness_onboarded', 'false');
+        })
+        .finally(() => {
+          setChecked(true);
         });
     });
   }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
+
+    // No decidimos nada hasta haber consultado /me (evita un redirect
+    // prematuro a /onboarding mientras isOnboarded arranca en false).
+    if (!checked) return;
 
     // Si NO hay sesión en Clerk → a sign-in (el middleware de Clerk lo maneja)
     if (!isSignedIn) {
