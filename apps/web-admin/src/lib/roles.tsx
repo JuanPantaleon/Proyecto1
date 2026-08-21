@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { api } from '@/lib/api';
 
 export type AppRole = 'player' | 'gym' | 'coach' | 'admin';
@@ -244,6 +245,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole>('player');
   const [isOwner, setIsOwner] = useState(false);
   const [ecosystem, setEcosystem] = useState<EcosystemState>(() => loadEcosystem());
+  const { isLoaded, isSignedIn } = useAuth();
 
   useEffect(() => {
     try {
@@ -268,6 +270,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!isLoaded) return;
+
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     if (!token) {
       setIsOwner(false);
@@ -287,11 +291,17 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       .catch((error) => {
         if (!cancelled) {
           console.error('[RoleProvider] Failed to verify OWNER role:', error);
-          if (error?.response?.status === 401) {
-            localStorage.removeItem('auth_token');
-            if (typeof window !== 'undefined') {
-              window.location.href = '/sign-in';
+          // Si hay error 401/404 PERO hay sesión en Clerk → usuario nuevo/desincronizado
+          // NO redirigir a /sign-in, dejar que OnboardingGate maneje la redirección a /onboarding
+          if (error?.response?.status === 401 || error?.response?.status === 404) {
+            if (!isSignedIn) {
+              // Solo redirigir a sign-in si NO hay sesión en Clerk
+              localStorage.removeItem('auth_token');
+              if (typeof window !== 'undefined') {
+                window.location.href = '/sign-in';
+              }
             }
+            // Si hay sesión en Clerk, NO redirigir - dejar que OnboardingGate maneje
           }
           setIsOwner(false);
         }
@@ -299,7 +309,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
   // Anti-tamper: la vista `admin` solo es legítima para el OWNER verificado.
   useEffect(() => {

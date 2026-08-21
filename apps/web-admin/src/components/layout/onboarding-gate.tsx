@@ -2,11 +2,13 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { isLoaded, isSignedIn } = useAuth();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -14,12 +16,20 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
       setChecking(false);
       return;
     }
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
+
+    // Si Clerk no ha terminado de cargar, esperamos
+    if (!isLoaded) {
+      return;
+    }
+
+    // Si NO hay sesión en Clerk, no hay nada que hacer aquí
+    // El middleware de Clerk se encargará de redirigir a sign-in
+    if (!isSignedIn) {
       setChecking(false);
       return;
     }
 
+    // HAY sesión en Clerk → verificamos con nuestro backend
     let cancelled = false;
     setChecking(true);
 
@@ -30,17 +40,20 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
         if (me?.isOnboarded) {
           localStorage.setItem('ranked_fitness_onboarded', 'true');
         } else {
+          // Usuario existe en Clerk pero no está onboarded → a onboarding
           router.replace('/onboarding');
         }
       })
       .catch((error) => {
         if (cancelled) return;
         console.error('[OnboardingGate] Failed to check onboarding status:', error);
-        if (error?.response?.status === 401) {
-          localStorage.removeItem('auth_token');
-          window.location.href = '/sign-in';
+        
+        // Si hay error 401/404 pero Clerk dice que hay sesión → usuario nuevo/desincronizado
+        // Lo enviamos a onboarding para que el POST cree/actualice su perfil
+        if (error?.response?.status === 401 || error?.response?.status === 404) {
+          router.replace('/onboarding');
         } else {
-          // Si la API falla por cualquier otro motivo, redirigir a onboarding por seguridad
+          // Otros errores de red/servidor → también a onboarding por seguridad
           router.replace('/onboarding');
         }
       })
@@ -51,7 +64,7 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, isLoaded, isSignedIn]);
 
   if (checking) {
     return (

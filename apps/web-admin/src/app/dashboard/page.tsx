@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { Loader2, User, Building2, GraduationCap, Crown } from 'lucide-react';
 import { useRole } from '@/lib/roles';
 
@@ -28,16 +29,19 @@ const ROLE_DESCRIPTIONS = {
 
 export default function DashboardDispatcher() {
   const router = useRouter();
+  const { isLoaded, isSignedIn } = useAuth();
   const { role, isOwner } = useRole();
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-    
-    if (!token) {
+    if (!isLoaded) return;
+
+    // Si NO hay sesión en Clerk → a sign-in (el middleware de Clerk lo maneja)
+    if (!isSignedIn) {
       router.replace('/sign-in');
       return;
     }
 
+    // HAY sesión en Clerk → decidimos a dónde ir según rol/onboarding
     if (isOwner) {
       router.replace('/dashboard/owner');
       return;
@@ -57,9 +61,10 @@ export default function DashboardDispatcher() {
         router.replace('/dashboard/admin');
         break;
       default:
+        // Usuario logueado en Clerk pero sin rol asignado → a onboarding
         router.replace('/onboarding');
     }
-  }, [role, isOwner, router]);
+  }, [role, isOwner, isLoaded, isSignedIn, router]);
 
   const Icon = role && ROLE_ICONS[role as keyof typeof ROLE_ICONS] ? ROLE_ICONS[role as keyof typeof ROLE_ICONS] : Loader2;
 
