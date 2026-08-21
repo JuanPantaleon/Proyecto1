@@ -26,12 +26,11 @@ export class JwtAuthGuard implements CanActivate {
     try {
       payload = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY,
-        issuer:
-          process.env.CLERK_ISSUER ??
-          (process.env.CLERK_DOMAIN ? `https://${process.env.CLERK_DOMAIN}` : undefined),
       });
-    } catch {
-      throw new UnauthorizedException('Token inválido o expirado');
+    } catch (err: any) {
+      throw new UnauthorizedException(
+        `Token inválido o expirado: ${err?.message ?? err}`,
+      );
     }
 
     const clerkId = payload?.sub as string | undefined;
