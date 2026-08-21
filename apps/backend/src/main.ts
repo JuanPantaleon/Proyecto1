@@ -6,6 +6,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
+import express from 'express';
 
 function corsOrigins(): (string | RegExp)[] {
   const raw = process.env.CORS_ORIGINS ?? '';
@@ -17,7 +18,18 @@ function corsOrigins(): (string | RegExp)[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Desactivamos el body parser por defecto para poder capturar el cuerpo
+  // crudo (rawBody) necesario para verificar la firma Svix de los webhooks.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(
+    express.json({
+      limit: '10mb',
+      verify: (req, _res, buf) => {
+        (req as any).rawBody = buf;
+      },
+    }),
+  );
+  app.use(express.urlencoded({ extended: true }));
 
   // CORS: acepta el dominio de Vercel (CORS_ORIGINS) + localhost para desarrollo.
   app.enableCors({
