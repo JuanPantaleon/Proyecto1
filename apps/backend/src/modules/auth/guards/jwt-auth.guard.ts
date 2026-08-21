@@ -42,7 +42,7 @@ export class JwtAuthGuard implements CanActivate {
     const clerkId = payload?.sub as string | undefined;
     if (!clerkId) throw new UnauthorizedException('Token sin subject (sub)');
 
-    const user = await this.authService.ensureUser(clerkId);
+    const user = await this.authService.ensureUser(clerkId, payload);
 
     const activeView =
       resolveActiveView(req?.headers?.['x-active-view']) ?? req?.activeView;

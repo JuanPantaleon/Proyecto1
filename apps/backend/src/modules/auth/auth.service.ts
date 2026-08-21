@@ -1,6 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { clerkClient } from '@clerk/clerk-sdk-node';
 import type { CompleteOnboardingDto } from '@ranked-fitness/shared';
 
 const BASE_ROLE_TO_DB: Record<CompleteOnboardingDto['role'], 'USER' | 'TRAINER' | 'GYM_ADMIN'> = {
@@ -97,27 +96,47 @@ export class AuthService {
    * Esto hace el flujo resiliente aunque el webhook de Clerk tarde o falle:
    * /me y /onboarding funcionan igual tras el primer inicio de sesión.
    */
-  async ensureUser(clerkId: string) {
+  async ensureUser(clerkId: string, claims?: Record<string, any>) {
     const existing = await this.prisma.user.findUnique({ where: { clerkId } });
     if (existing) return existing;
 
-    let clerkUser: any;
-    try {
-      clerkUser = await clerkClient.users.getUser(clerkId);
-    } catch {
-      throw new UnauthorizedException('No se pudo resolver el usuario en Clerk');
+    // El token de sesión de Clerk ya trae los claims necesarios (email, nombre,
+    // foto). Creamos el usuario desde el token para EVITAR una llamada bloqueante
+    // a clerkClient.users.getUser (que colgaba /me cuando el usuario aún no está
+    // en la BD). El webhook de Clerk corrige/completa el registro luego.
+    const email = claims?.email ?? `${clerkId}@clerk.local`;
+    const isSynthetic = !claims?.email;
+    const firstName = claims?.given_name ?? null;
+    const lastName = claims?.family_name ?? null;
+    const imageUrl = claims?.picture ?? null;
+
+    // Si el email ya existe (p.ej. OWNER sembrado con clerkId sintético), adoptamos
+    // ese registro en lugar de romper la restricción @unique de email.
+    if (!isSynthetic) {
+      const byEmail = await this.prisma.user.findUnique({ where: { email } });
+      if (byEmail) {
+        const isRoot = isRootEmail(email);
+        return this.prisma.user.update({
+          where: { id: byEmail.id },
+          data: {
+            clerkId,
+            firstName,
+            lastName,
+            imageUrl,
+            ...(isRoot ? { role: 'OWNER' as const, isOnboarded: true } : {}),
+          },
+        });
+      }
     }
 
-    const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? null;
     const isRoot = isRootEmail(email);
-
     return this.prisma.user.create({
       data: {
         clerkId,
         email,
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
-        imageUrl: clerkUser.imageUrl,
+        firstName,
+        lastName,
+        imageUrl,
         currentWeightKg: 0,
         heightCm: 0,
         streakDays: 0,
