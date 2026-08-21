@@ -16,10 +16,14 @@ export class AuthController {
   @Post('clerk-webhook')
   @ApiOperation({ summary: 'Clerk webhook endpoint (verifica firma Svix)' })
   async clerkWebhook(@Req() req: any) {
-    const secret = process.env.CLERK_WEBHOOK_SECRET;
-    if (!secret) throw new UnauthorizedException('Webhook no configurado');
-    verifyClerkWebhook(req.rawBody, req.headers, secret);
-    return this.authService.handleClerkWebhook(req.body);
+    try {
+      const secret = process.env.CLERK_WEBHOOK_SECRET;
+      if (!secret) throw new UnauthorizedException('Webhook no configurado');
+      verifyClerkWebhook(req.rawBody, req.headers, secret);
+      return this.authService.handleClerkWebhook(req.body);
+    } catch (e: any) {
+      return { __debug: true, name: e?.name, message: e?.message, hasRaw: typeof req?.rawBody, rawIsBuffer: Buffer.isBuffer(req?.rawBody), stack: e?.stack };
+    }
   }
 
   @Get('me')
