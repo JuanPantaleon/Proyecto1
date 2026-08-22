@@ -233,8 +233,8 @@ export default function ComunidadPage() {
         const up = await api.upload<{ url: string; mediaKind: 'IMAGE' | 'VIDEO' }>('/api/v1/media/upload', fd);
         mediaUrl = up.url; mediaKind = up.mediaKind;
       }
-      const payload: Record<string, unknown> = { type: mediaUrl ? 'MEDIA' : 'TEXT', text: newText.trim() };
-      if (mediaUrl) { payload.mediaUrl = mediaUrl; payload.mediaKind = mediaKind; if (mediaKind === 'VIDEO') payload.mediaDurationSec = videoDuration; }
+      const payload: Record<string, unknown> = { text: newText.trim() };
+      if (mediaUrl) { payload.type = 'MEDIA'; payload.mediaUrl = mediaUrl; payload.mediaKind = mediaKind; if (mediaKind === 'VIDEO') payload.mediaDurationSec = videoDuration; }
       await api.post('/api/v1/comunidad/posts', payload);
       setNewText(''); setFile(null); setFilePreview(null); setVideoDuration(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
