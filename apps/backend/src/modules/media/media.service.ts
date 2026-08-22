@@ -1,24 +1,37 @@
-import { Injectable } from '@nestjs/common';
-import { promises as fs } from 'fs';
-import { extname, join } from 'path';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class MediaService {
-  private readonly uploadDir = join(process.cwd(), 'uploads');
+  constructor(private prisma: PrismaService) {}
 
-  async ensureDir() {
-    await fs.mkdir(this.uploadDir, { recursive: true });
+  async save(
+    ownerId: string,
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+  ): Promise<{ id: string; kind: 'IMAGE' | 'VIDEO' }> {
+    const kind = mimeType.startsWith('video') ? 'VIDEO' : 'IMAGE';
+    const created = await this.prisma.media.create({
+      data: {
+        ownerId,
+        mimeType,
+        kind,
+        size: buffer.length,
+        filename: originalName,
+        data: buffer,
+      },
+      select: { id: true, kind: true },
+    });
+    return { id: created.id, kind: created.kind as 'IMAGE' | 'VIDEO' };
   }
 
-  async save(buffer: Buffer, originalName: string): Promise<string> {
-    await this.ensureDir();
-    const safe = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extname(safe)}`;
-    await fs.writeFile(join(this.uploadDir, filename), buffer);
-    return filename;
-  }
-
-  resolve(filename: string): string {
-    return join(this.uploadDir, filename);
+  async get(id: string): Promise<{ data: Buffer; mimeType: string }> {
+    const media = await this.prisma.media.findUnique({
+      where: { id },
+      select: { data: true, mimeType: true },
+    });
+    if (!media) throw new NotFoundException('Archivo no encontrado');
+    return { data: media.data as Buffer, mimeType: media.mimeType };
   }
 }

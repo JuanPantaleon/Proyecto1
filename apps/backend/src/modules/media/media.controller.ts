@@ -14,10 +14,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { Request, Response } from 'express';
-import { access as fsAccess } from 'fs/promises';
 import { JwtAuthGuard } from '../../modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../modules/auth/decorators/current-user.decorator';
 import { MediaService } from './media.service';
+
+const MAX_BYTES = 50 * 1024 * 1024;
 
 @ApiTags('media')
 @Controller('api/v1/media')
@@ -27,30 +28,30 @@ export class MediaController {
   constructor(private mediaService: MediaService) {}
 
   @Post('upload')
-  @ApiOperation({ summary: 'Subir imagen o video (multipart, campo "file")' })
+  @ApiOperation({ summary: 'Subir imagen o video (multipart, campo "file"). Se guarda en la base de datos.' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
-  async upload(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
+  async upload(@UploadedFile() file: Express.Multer.File, @CurrentUser() user: any, @Req() req: Request) {
     if (!file) throw new BadRequestException('No se recibió ningún archivo');
     if (!file.mimetype.startsWith('image/') && !file.mimetype.startsWith('video/')) {
       throw new BadRequestException('Solo se permiten imágenes o videos');
     }
-    const filename = await this.mediaService.save(file.buffer, file.originalname);
+    const { id, kind } = await this.mediaService.save(user.id, file.buffer, file.originalname, file.mimetype);
     const base = process.env.BACKEND_PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-    const mediaKind = file.mimetype.startsWith('video') ? 'VIDEO' : 'IMAGE';
-    return { url: `${base}/api/v1/media/${filename}`, mediaKind };
+    return { url: `${base}/api/v1/media/${id}`, mediaKind: kind };
   }
 
-  @Get(':file')
-  @ApiOperation({ summary: 'Servir un archivo subido' })
-  async serve(@Param('file') file: string, @Res() res: Response) {
-    const safe = file.replace(/[^a-zA-Z0-9._-]/g, '');
-    const path = this.mediaService.resolve(safe);
+  @Get(':id')
+  @ApiOperation({ summary: 'Servir un archivo subido (persistido en base de datos)' })
+  async serve(@Param('id') id: string, @Res() res: Response) {
     try {
-      await fsAccess(path);
-    } catch {
-      throw new NotFoundException('Archivo no encontrado');
+      const { data, mimeType } = await this.mediaService.get(id);
+      res.set('Content-Type', mimeType);
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      res.send(data);
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
+      throw err;
     }
-    res.sendFile(path);
   }
 }

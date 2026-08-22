@@ -144,6 +144,7 @@ model User {
   chatRoomsCreated   ChatRoom[] @relation("ChatCreatedBy")
   chatMemberships    ChatRoomMember[]
   messagesSent       Message[] @relation("MessageSender")
+  media              Media[]   @relation("MediaOwner")
 
   @@map("users")
 }
@@ -432,4 +433,19 @@ model Message {
 
   @@index([roomId, createdAt])
   @@map("messages")
+}
+
+model Media {
+  id        String    @id @default(uuid())
+  ownerId   String    @map("owner_id")
+  owner     User      @relation("MediaOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  mimeType  String    @map("mime_type")
+  kind      MediaKind @map("kind")
+  size      Int
+  filename  String
+  data      Bytes
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([ownerId, createdAt])
+  @@map("media")
 }
