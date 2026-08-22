@@ -167,6 +167,25 @@ export class RelationsService {
     }));
   }
 
+  async searchUsers(userId: string, q?: string) {
+    const where: Record<string, unknown> = { id: { not: userId } };
+    const term = (q ?? '').trim();
+    if (term) {
+      where.OR = [
+        { firstName: { contains: term, mode: 'insensitive' } },
+        { lastName: { contains: term, mode: 'insensitive' } },
+        { email: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+    const users = await this.prisma.user.findMany({
+      where,
+      select: USER_SELECT,
+      take: 20,
+      orderBy: { createdAt: 'desc' },
+    });
+    return users.map((u) => ({ ...u, name: this.fullName(u) }));
+  }
+
   async listConnections(userId: string) {
     const [sent, received] = await Promise.all([
       this.prisma.connection.findMany({

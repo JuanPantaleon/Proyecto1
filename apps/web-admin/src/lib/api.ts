@@ -81,6 +81,13 @@ class ApiClient {
     return response.data;
   }
 
+  async upload<T>(url: string, formData: FormData) {
+    const response = await this.client.post<T>(url, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  }
+
   async put<T>(url: string, data?: unknown) {
     const response = await this.client.put<T>(url, data);
     return response.data;

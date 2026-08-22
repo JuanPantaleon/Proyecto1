@@ -27,7 +27,7 @@ export const createPostSchema = z
   .object({
     type: postTypeSchema.default('MEDIA'),
     text: z.string().trim().max(500).optional().default(''),
-    mediaUrl: z.string().url().optional(),
+    mediaUrl: z.string().min(1).optional(),
     mediaKind: mediaKindSchema.optional(),
     mediaDurationSec: z.number().int().positive().max(7200).optional(),
     liftName: z.string().trim().max(100).optional(),
@@ -63,7 +63,7 @@ export const createChatSchema = z.object({
 export const sendMessageSchema = z
   .object({
     text: z.string().trim().max(2000).optional().default(''),
-    mediaUrl: z.string().url().optional(),
+    mediaUrl: z.string().min(1).optional(),
     mediaKind: mediaKindSchema.optional(),
     voiceDurationSec: z.number().int().positive().max(600).optional(),
   })

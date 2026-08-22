@@ -1,1646 +1,534 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
-import {
-  Flame,
-  MessageCircle,
-  Send,
-  Trophy,
-  Dumbbell,
-  ImagePlus,
-  UserPlus,
-  UserCheck,
-  X,
-  Check,
-  Users,
-  User,
-  MessageSquare,
-  Newspaper,
-  ArrowLeft,
-  ShieldCheck,
-  Skull,
-  Crown,
-  ClipboardList,
-  Target,
-  CalendarCheck,
-  TrendingUp,
-  MapPin,
-  Building2,
-  Video,
-  Mic,
-  Play,
-  Pause,
-  Paperclip,
-} from 'lucide-react';
+import { useEffect, useState, useRef, type ChangeEvent } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { Flame, Send, ImagePlus, X, Check, Users, User, MessageSquare, Newspaper, ArrowLeft, Skull, Crown, ClipboardList, MapPin, Search, Play, Loader2, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
-import { useRole, PLAYER_PROFILE } from '@/lib/roles';
 
-interface Comment {
-  id: string;
-  user: string;
-  text: string;
+/* ----------------------------- Tipos ----------------------------- */
+interface ApiUser { id: string; name?: string; email?: string; imageUrl?: string | null; role?: string; gymId?: string | null; streakDays?: number; }
+interface ApiPost {
+  id: string; type: string; text: string; mediaUrl?: string | null; mediaKind?: string | null;
+  mediaDurationSec?: number | null; liftName?: string | null; weightKg?: number | null; reps?: number | null;
+  isgScore?: number | null; createdAt: string; author: ApiUser;
+  reactions: { FIRE?: number; SKULL?: number; CROWN?: number };
+  myReactions: { FIRE?: boolean; SKULL?: boolean; CROWN?: boolean };
+  comments: { id: string; text: string; createdAt: string; author: ApiUser }[];
 }
-
-interface FollowRequest {
-  id: number;
-  user: string;
-  note: string;
-}
-
-interface Friend {
-  id: number;
-  name: string;
-  division: string;
-  online: boolean;
-}
-
-interface ChatMessage {
-  id: number;
-  from: 'me' | 'them';
-  text?: string;
-  time: string;
-  attachments?: ChatAttachment[];
-}
-
-interface ChatAttachment {
-  type: 'image' | 'video' | 'voice';
-  label?: string;
-  duration?: string;
-}
-
-interface Conversation {
-  id: number;
-  user: string;
-  roleLabel: string;
-  online: boolean;
-  unread: number;
-  messages: ChatMessage[];
-}
+interface Connection { id: string; type: string; user: ApiUser; }
+interface FollowRequest { id: string; type: string; status: string; user: ApiUser; createdAt: string; }
+interface ChatRoom { id: string; name: string; isGroup: boolean; members: ApiUser[]; lastMessage: { id?: string; text?: string; createdAt?: string; senderId?: string } | null; }
+interface ChatMessage { id: string; roomId: string; senderId: string; text: string; mediaUrl?: string | null; mediaKind?: string | null; createdAt: string; sender: ApiUser; }
 
 type Tab = 'feed' | 'amigos' | 'perfil' | 'mensajes' | 'solicitudes';
-
 type ReactionKey = 'FIRE' | 'SKULL' | 'CROWN';
 type FeedFilter = 'all' | 'following' | 'local' | 'elite';
 
-type PostMediaType = 'image' | 'video';
-
-interface PostMedia {
-  type: PostMediaType;
-  gradient: string;
-  label: string;
-  duration?: string;
+/* ----------------------------- Helpers ----------------------------- */
+const initials = (n?: string) => (n ?? '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+function timeAgo(iso?: string): string {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'ahora';
+  const m = Math.floor(s / 60); if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60); if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24); if (d < 7) return `hace ${d} d`;
+  return new Date(iso).toLocaleDateString();
 }
-
-interface Post {
-  id: string;
-  user: string;
-  role: 'player' | 'coach' | 'gym';
-  roleLabel: string;
-  division: string;
-  text: string;
-  isg?: number;
-  media?: PostMedia;
-  reactions: Record<ReactionKey, number>;
-  comments: Comment[];
-}
-
-const ROLE_COLOR: Record<Post['role'], string> = {
-  player: 'text-[#FBBF24]',
-  coach: 'text-[#38BDF8]',
-  gym: 'text-[#EF4444]',
+const roleLabel = (r?: string | null): string => {
+  switch (r) { case 'TRAINER': case 'SUPER_ADMIN': return 'Entrenador/a'; case 'GYM_ADMIN': return 'Gimnasio'; case 'OWNER': return 'Admin'; default: return 'Jugador'; }
 };
-
-const DIVISION_BADGE: Record<string, string> = {
-  Platino: 'border-white/40 bg-white/10 text-white',
-  Oro: 'border-[#FBBF24]/60 bg-[#FBBF24]/10 text-[#FBBF24]',
-  Plata: 'border-white/20 bg-white/5 text-gray-300',
-  Bronce: 'border-[#B45309]/60 bg-[#B45309]/10 text-[#D97706]',
+const roleColor = (r?: string | null): string =>
+  r === 'TRAINER' || r === 'SUPER_ADMIN' || r === 'OWNER' ? 'text-[#38BDF8]' : r === 'GYM_ADMIN' ? 'text-[#EF4444]' : 'text-[#FBBF24]';
+const mediaKindOf = (p: ApiPost): 'IMAGE' | 'VIDEO' | null => {
+  if (p.mediaKind) return p.mediaKind as 'IMAGE' | 'VIDEO';
+  if (p.mediaUrl?.match(/\.(mp4|webm|ogg)$/i)) return 'VIDEO';
+  if (p.mediaUrl) return 'IMAGE';
+  return null;
 };
-
-const initials = (name: string) =>
-  name
-    .split(' ')
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-
-interface ApiPost {
-  id: string;
-  author?: { name?: string; role?: string } | null;
-  text?: string;
-  isgScore?: number | null;
-  mediaKind?: string | null;
-  mediaDurationSec?: number | null;
-  reactions?: { FIRE?: number; SKULL?: number; CROWN?: number };
-  myReactions?: { FIRE?: boolean; SKULL?: boolean; CROWN?: boolean };
-  comments?: { id: string; text: string; author?: { name?: string } | null }[];
-}
-
-const roleFromBackend = (r?: string | null): Post['role'] => {
-  if (r === 'TRAINER' || r === 'GYM_ADMIN' || r === 'SUPER_ADMIN') return 'coach';
-  return 'player';
-};
-
-const roleLabelFromBackend = (r?: string | null): string => {
-  if (r === 'TRAINER' || r === 'SUPER_ADMIN') return 'Entrenador/a';
-  if (r === 'GYM_ADMIN') return 'Gimnasio';
-  return 'Jugador';
-};
-
-const FEED_FILTERS: FeedFilter[] = ['all', 'following', 'local', 'elite'];
-const FILTER_LABEL: Record<FeedFilter, string> = {
-  all: 'Todo',
-  following: 'Siguiendo',
-  local: 'Pantafit',
-  elite: 'Élite',
-};
-
-const REACTIONS: {
-  key: ReactionKey;
-  label: string;
-  icon: typeof Flame;
-  activeClass: string;
-}[] = [
+const REACTIONS: { key: ReactionKey; label: string; icon: typeof Flame; activeClass: string }[] = [
   { key: 'FIRE', label: 'Respeto', icon: Flame, activeClass: 'border-[#EF4444]/60 bg-[#EF4444]/15 text-[#EF4444]' },
   { key: 'SKULL', label: 'Brutal', icon: Skull, activeClass: 'border-white/40 bg-white/10 text-white' },
   { key: 'CROWN', label: 'Élite', icon: Crown, activeClass: 'border-[#FBBF24]/60 bg-[#FBBF24]/15 text-[#FBBF24]' },
 ];
+const FEED_FILTERS: FeedFilter[] = ['all', 'following', 'local', 'elite'];
+const FILTER_LABEL: Record<FeedFilter, string> = { all: 'Todo', following: 'Siguiendo', local: 'Mi gimnasio', elite: 'Élite' };
 
-const INITIAL_POSTS: Post[] = [
-  {
-    id: 'p1',
-    user: 'Lautaro Díaz',
-    role: 'player',
-    roleLabel: 'Jugador',
-    division: 'Platino',
-    text: '¡Nuevo PR en Sentadilla con 120kg!',
-    isg: 145,
-    media: { type: 'video', gradient: 'from-[#1a1a1a] via-[#EF4444]/20 to-[#0D0D0D]', label: 'Sentadilla · 120 kg × 5', duration: '00:12' },
-    reactions: { FIRE: 42, SKULL: 8, CROWN: 3 },
-    comments: [
-      { id: 'c1', user: 'Valentina Ríos', text: '¡Monstruo! 🔥' },
-      { id: 'c2', user: 'Martín Quispe', text: 'Eso es mentalidad, crack.' },
-    ],
-  },
-  {
-    id: 'p2',
-    user: 'Valentina Ríos',
-    role: 'player',
-    roleLabel: 'Jugador',
-    division: 'Oro',
-    text: 'Ascendí a División Oro 🏆 Gracias por el apoyo de siempre.',
-    isg: 98,
-    reactions: { FIRE: 67, SKULL: 4, CROWN: 2 },
-    comments: [{ id: 'c3', user: 'Lautaro Díaz', text: '¡Bien merecido!' }],
-  },
-  {
-    id: 'p3',
-    user: 'Lucía Fernández',
-    role: 'coach',
-    roleLabel: 'Entrenadora',
-    division: '—',
-    text: 'Plan de hipertrofia actualizado para el bloque de competencia. ¡Se viene todo!',
-    media: { type: 'image', gradient: 'from-[#0D0D0D] via-[#38BDF8]/15 to-[#1a1a1a]', label: 'Programa · Bloque Competitivo' },
-    reactions: { FIRE: 31, SKULL: 1, CROWN: 12 },
-    comments: [],
-  },
-  {
-    id: 'p4',
-    user: 'Pantafit',
-    role: 'gym',
-    roleLabel: 'Gimnasio',
-    division: '—',
-    text: '¡Nuevo equipamiento en la zona de peso muerto! Ven a probarlo.',
-    media: { type: 'image', gradient: 'from-[#1a1a1a] via-[#FBBF24]/20 to-[#0D0D0D]', label: 'Zona de Fuerza · Pantafit' },
-    reactions: { FIRE: 54, SKULL: 0, CROWN: 9 },
-    comments: [],
-  },
-  {
-    id: 'p5',
-    user: 'Martín Quispe',
-    role: 'player',
-    roleLabel: 'Jugador',
-    division: 'Plata',
-    text: 'Press de Banca 100 kg cerrado a una repetición. El proceso sigue.',
-    isg: 88,
-    reactions: { FIRE: 26, SKULL: 2, CROWN: 1 },
-    comments: [],
-  },
-];
+function PostCard({ post, onReact, onComment, onFollow, isFollowed, showComments, toggleComments, draft, setDraft, meId, meName, avatarUrl }:
+  { post: ApiPost; onReact: (p: ApiPost, k: ReactionKey) => void; onComment: (p: ApiPost) => void; onFollow: (id: string) => void; isFollowed: boolean; showComments: boolean; toggleComments: (id: string) => void; draft: string; setDraft: (p: string, v: string) => void; meId?: string; meName: string; avatarUrl?: string | null }) {
+  const kind = mediaKindOf(post);
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#111] p-4">
+      <div className="flex items-center gap-3">
+        <img src={post.author.imageUrl ?? undefined} alt="" className="h-10 w-10 rounded-full bg-[#1a1a1a] object-cover" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold">{post.author.name || 'Usuario'}</p>
+          <p className={cn('text-xs', roleColor(post.author.role))}>{roleLabel(post.author.role)} · {timeAgo(post.createdAt)}</p>
+        </div>
+        {post.author.id !== meId && (
+          <button onClick={() => onFollow(post.author.id)} disabled={isFollowed}
+            className={cn('flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold', isFollowed ? 'bg-[#1a1a1a] text-white/40' : 'bg-[#EF4444] text-white')}>
+            {isFollowed ? <Check className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}{isFollowed ? 'Enviado' : 'Seguir'}
+          </button>
+        )}
+      </div>
 
-const INITIAL_FRIENDS: Friend[] = [
-  { id: 1, name: 'Lautaro Díaz', division: 'Platino', online: true },
-  { id: 2, name: 'Valentina Ríos', division: 'Oro', online: false },
-  { id: 3, name: 'Martín Quispe', division: 'Plata', online: true },
-  { id: 4, name: 'Camila Sosa', division: 'Plata', online: false },
-  { id: 5, name: 'Joaquín Arce', division: 'Bronce', online: true },
-];
+      {post.text && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{post.text}</p>}
 
-const INITIAL_CONVERSATIONS: Conversation[] = [
-  {
-    id: 1,
-    user: 'Lautaro Díaz',
-    roleLabel: 'Jugador · Platino',
-    online: true,
-    unread: 2,
-    messages: [
-      { id: 1, from: 'them', text: '¡Buen PR de hoy, crack!', time: '10:12' },
-      { id: 2, from: 'me', text: 'Gracias bro, el plan de Lucía está pegando fuerte 💪', time: '10:15' },
-      { id: 3, from: 'them', text: '¿Mañana entrenamos juntos la sentadilla?', time: '10:18' },
-      { id: 4, from: 'them', text: 'Arranco 9:00 en Pantafit', time: '10:19' },
-      { id: 5, from: 'them', attachments: [{ type: 'voice', label: 'Nota de voz', duration: '0:08' }], time: '10:20' },
-      { id: 6, from: 'them', attachments: [{ type: 'image', label: 'Progreso · Sentadilla 120 kg' }], time: '10:21' },
-    ],
-  },
-  {
-    id: 2,
-    user: 'Lucía Fernández',
-    roleLabel: 'Entrenadora · Pantafit',
-    online: true,
-    unread: 0,
-    messages: [
-      { id: 1, from: 'them', text: 'Te dejé el bloque de hipertrofia actualizado.', time: '09:02' },
-      { id: 2, from: 'me', text: 'Perfecto, lo reviso hoy.', time: '09:05' },
-    ],
-  },
-  {
-    id: 3,
-    user: 'Pantafit',
-    roleLabel: 'Gimnasio',
-    online: false,
-    unread: 1,
-    messages: [
-      { id: 1, from: 'them', text: 'Tu cuota de septiembre está al día ✅', time: 'Ayer' },
-      { id: 2, from: 'them', text: 'Nueva zona de peso muerto habilitada.', time: 'Ayer' },
-    ],
-  },
-];
+      {kind && post.mediaUrl && (
+        <div className="relative mt-3 overflow-hidden rounded-xl">
+          {kind === 'VIDEO' ? (
+            <video src={post.mediaUrl} controls className="max-h-96 w-full bg-black" />
+          ) : <img src={post.mediaUrl} alt="" className="max-h-96 w-full object-cover" />}
+          {kind === 'VIDEO' && <Play className="pointer-events-none absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 text-white/80" />}
+        </div>
+      )}
 
-const WEEK_PROGRESS = [
-  { day: 'L', pct: 85 },
-  { day: 'M', pct: 60 },
-  { day: 'X', pct: 95 },
-  { day: 'J', pct: 40 },
-  { day: 'V', pct: 70 },
-  { day: 'S', pct: 100 },
-  { day: 'D', pct: 25 },
-];
+      {(post.liftName || post.weightKg) && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          {post.liftName && <span className="rounded-full bg-[#FBBF24]/15 px-2 py-1 font-semibold text-[#FBBF24]">{post.liftName}</span>}
+          {post.weightKg != null && <span className="rounded-full bg-white/10 px-2 py-1">{post.weightKg} kg{post.reps != null ? ` × ${post.reps}` : ''}</span>}
+          {post.isgScore != null && <span className="rounded-full bg-[#38BDF8]/15 px-2 py-1 text-[#38BDF8]">ISG {Math.round(post.isgScore)}</span>}
+        </div>
+      )}
 
-const DEFAULT_IMAGE_MEDIA: PostMedia = {
-  type: 'image',
-  gradient: 'from-[#1a1a1a] via-[#EF4444]/20 to-[#0D0D0D]',
-  label: 'Imagen adjunta',
-};
+      <div className="mt-4 flex items-center gap-2">
+        {REACTIONS.map((r) => {
+          const Icon = r.icon; const active = post.myReactions?.[r.key];
+          return (
+            <button key={r.key} onClick={() => onReact(post, r.key)}
+              className={cn('flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition', active ? r.activeClass : 'border-white/10 text-white/60 hover:text-white')}>
+              <Icon className="h-3.5 w-3.5" />{post.reactions?.[r.key] ?? 0}
+            </button>
+          );
+        })}
+        <button onClick={() => toggleComments(post.id)} className="ml-auto flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/60 hover:text-white">
+          <MessageSquare className="h-3.5 w-3.5" />{post.comments.length}
+        </button>
+      </div>
 
-const DEFAULT_VIDEO_MEDIA: PostMedia = {
-  type: 'video',
-  gradient: 'from-[#0D0D0D] via-[#38BDF8]/15 to-[#1a1a1a]',
-  label: 'Video adjunto',
-  duration: '00:15',
-};
-
-const WAVEFORM_BARS = Array.from({ length: 28 }, (_, i) => 10 + ((i * 37) % 26));
+      {showComments && (
+        <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+          {post.comments.map((c) => (
+            <div key={c.id} className="flex gap-2 text-sm"><span className="font-semibold text-[#FBBF24]">{c.author.name || 'Usuario'}</span><span className="text-white/80">{c.text}</span></div>
+          ))}
+          <div className="flex gap-2">
+            <input value={draft} onChange={(e) => setDraft(post.id, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onComment(post)} placeholder="Comenta..." className="flex-1 rounded-full border border-white/10 bg-[#0c0c0c] px-3 py-1.5 text-sm outline-none focus:border-[#FBBF24]/50" />
+            <button onClick={() => onComment(post)} className="rounded-full bg-[#FBBF24] px-3 py-1.5 text-sm font-bold text-black"><Send className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ComunidadPage() {
-  const {
-    role,
-    profile,
-    players,
-    coachingRequests,
-    acceptCoaching,
-    rejectCoaching,
-    routineAssignments,
-    assignRoutine,
-  } = useRole();
-  const own = 'role' in profile && profile.role === 'player' ? profile : PLAYER_PROFILE;
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const avatarUrl = clerkUser?.imageUrl ?? null;
+  const clerkName = [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ') || clerkUser?.username || 'Tú';
+
+  const [me, setMe] = useState<{ id: string; name: string; role?: string; locationCountry?: string | null; locationProvince?: string | null } | null>(null);
+  const meId = me?.id;
+  const meName = me?.name || clerkName;
+  const effectiveRole = me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? 'coach'
+    : me?.role === 'GYM_ADMIN' ? 'gym'
+    : me?.role === 'OWNER' ? 'admin' : 'player';
+  const isStaff = effectiveRole === 'coach' || effectiveRole === 'gym' || effectiveRole === 'admin';
 
   const [tab, setTab] = useState<Tab>('feed');
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
-  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const [posts, setPosts] = useState<ApiPost[]>([]);
   const [myReactions, setMyReactions] = useState<Record<string, Partial<Record<ReactionKey, boolean>>>>({});
+  const [loadingFeed, setLoadingFeed] = useState(true);
   const [openComments, setOpenComments] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [newText, setNewText] = useState('');
-  const [newMedia, setNewMedia] = useState<PostMedia | null>(null);
-  const [friends] = useState<Friend[]>(INITIAL_FRIENDS);
-  const [followRequests, setFollowRequests] = useState<FollowRequest[]>([
-    { id: 1, user: 'Lautaro Díaz', note: 'Quiere seguirte' },
-    { id: 2, user: 'Camila Sosa', note: 'Solicitud de seguimiento' },
-    { id: 3, user: 'Renata Vidal', note: 'Te sigue desde el ranking' },
-  ]);
-  const [acceptedFollows, setAcceptedFollows] = useState<number[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [activeChatId, setActiveChatId] = useState<number | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [friends, setFriends] = useState<Connection[]>([]);
+  const [requests, setRequests] = useState<FollowRequest[]>([]);
+  const [followed, setFollowed] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ApiUser[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [staffRequests, setStaffRequests] = useState<FollowRequest[]>([]);
+  const [linkedAthletes, setLinkedAthletes] = useState<ApiUser[]>([]);
+  const [rooms, setRooms] = useState<ChatRoom[]>([]);
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
-  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
-  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachment | null>(null);
-  const [voicePlayingId, setVoicePlayingId] = useState<number | null>(null);
-  const [voiceProgress, setVoiceProgress] = useState<Record<number, number>>({});
-
-  const isStaff = role === 'gym' || role === 'coach' || role === 'admin';
-  const [routines, setRoutines] = useState<{ id: string; name: string }[]>([]);
-
-  const athletes: { id: string; name: string }[] = isStaff
-    ? role === 'coach'
-      ? 'linkedStudents' in profile && Array.isArray(profile.linkedStudents)
-        ? profile.linkedStudents.map((s) => ({ id: s.id, name: s.name }))
-        : []
-      : players.map((p) => ({ id: p.id, name: p.name }))
-    : [];
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(
-        localStorage.getItem('ranked_fitness_custom_routines') ?? '[]'
-      );
-      if (Array.isArray(stored)) {
-        setRoutines(
-          stored.map((r: { id?: string | number; name?: string }, i: number) => ({
-            id: String(r.id ?? i),
-            name: r.name ?? `Rutina ${i + 1}`,
-          }))
-        );
-      }
-    } catch {
-      // sin rutinas locales
-    }
-  }, []);
+    if (!clerkLoaded) return;
+    api.get<{ id: string; firstName?: string | null; lastName?: string | null; role?: string; locationCountry?: string | null; locationProvince?: string | null }>('/api/v1/auth/me')
+      .then((m) => setMe({ id: m.id, name: [m.firstName, m.lastName].filter(Boolean).join(' ') || clerkName, role: m.role, locationCountry: m.locationCountry, locationProvince: m.locationProvince }))
+      .catch(() => undefined);
+  }, [clerkLoaded, clerkName]);
 
-  useEffect(() => {
-    api
-      .get<ApiPost[]>('/api/v1/comunidad/feed', { filter: feedFilter })
+  const fetchFeed = (filter: FeedFilter) => {
+    setLoadingFeed(true);
+    api.get<ApiPost[]>('/api/v1/comunidad/feed', { filter })
       .then((apiPosts) => {
-        if (!Array.isArray(apiPosts) || apiPosts.length === 0) return;
-        setPosts(
-          apiPosts.map((p) => ({
-            id: p.id,
-            user: p.author?.name ?? 'Usuario',
-            role: roleFromBackend(p.author?.role),
-            roleLabel: roleLabelFromBackend(p.author?.role),
-            division: '—',
-            text: p.text ?? '',
-            isg: typeof p.isgScore === 'number' ? p.isgScore : undefined,
-            media: p.mediaKind
-              ? {
-                  type: p.mediaKind === 'VIDEO' ? 'video' : 'image',
-                  gradient: 'from-[#1a1a1a] via-[#EF4444]/15 to-[#0D0D0D]',
-                  label:
-                    p.mediaKind === 'VIDEO'
-                      ? 'Video de levantamiento'
-                      : 'Imagen',
-                  duration:
-                    typeof p.mediaDurationSec === 'number'
-                      ? `${Math.floor(p.mediaDurationSec / 60)}:${String(p.mediaDurationSec % 60).padStart(2, '0')}`
-                      : undefined,
-                }
-              : undefined,
-            reactions: {
-              FIRE: p.reactions?.FIRE ?? 0,
-              SKULL: p.reactions?.SKULL ?? 0,
-              CROWN: p.reactions?.CROWN ?? 0,
-            },
-            comments: (p.comments ?? []).map((c) => ({
-              id: c.id,
-              user: c.author?.name ?? 'Usuario',
-              text: c.text,
-            })),
-          }))
-        );
+        const list = Array.isArray(apiPosts) ? apiPosts : [];
+        setPosts(list);
         const mr: Record<string, Partial<Record<ReactionKey, boolean>>> = {};
-        apiPosts.forEach((p) => {
-          if (p.myReactions) mr[p.id] = p.myReactions;
-        });
+        list.forEach((p) => { if (p.myReactions) mr[p.id] = p.myReactions; });
         setMyReactions(mr);
       })
+      .catch(() => setPosts([]))
+      .finally(() => setLoadingFeed(false));
+  };
+  useEffect(() => { fetchFeed(feedFilter); /* eslint-disable-next-line */ }, [feedFilter]);
+
+  const fetchFriends = () => api.get<Connection[]>('/api/v1/relaciones/conexiones').then(setFriends).catch(() => setFriends([]));
+  const fetchRequests = () =>
+    api.get<FollowRequest[]>('/api/v1/relaciones/solicitudes')
+      .then((rs) => { setRequests(rs.filter((r) => r.type !== 'COACH_ATHLETE')); setStaffRequests(rs.filter((r) => r.type === 'COACH_ATHLETE')); })
       .catch(() => undefined);
-  }, [feedFilter]);
+  const fetchLinked = () => {
+    if (!isStaff) return;
+    const url = effectiveRole === 'gym' ? '/api/v1/relaciones/gimnasio/jugadores' : '/api/v1/relaciones/coach/atletas';
+    api.get<ApiUser[]>(url).then(setLinkedAthletes).catch(() => setLinkedAthletes([]));
+  };
+  useEffect(() => { if (meId) { fetchFriends(); fetchRequests(); fetchLinked(); } /* eslint-disable-next-line */ }, [meId, isStaff, effectiveRole]);
 
-  const acceptCoach = (id: string) => {
-    acceptCoaching(id);
+  const fetchRooms = (openId?: string) => {
+    setLoadingRooms(true);
+    api.get<ChatRoom[]>('/api/v1/chat/salas')
+      .then((rs) => { setRooms(rs); if (openId && !activeRoomId) setActiveRoomId(openId); })
+      .catch(() => setRooms([]))
+      .finally(() => setLoadingRooms(false));
+  };
+  useEffect(() => { if (meId) fetchRooms(); /* eslint-disable-next-line */ }, [meId]);
+
+  const openRoom = (id: string) => {
+    setActiveRoomId(id);
+    api.get<ChatMessage[]>('/api/v1/chat/salas/' + id + '/mensajes').then(setActiveMessages).catch(() => setActiveMessages([]));
+    api.put('/api/v1/chat/salas/' + id + '/leido').catch(() => undefined);
   };
 
-  const rejectCoach = (id: string) => {
-    rejectCoaching(id);
+  const startChatWith = (other: ApiUser) => {
+    const existing = rooms.find((r) => !r.isGroup && r.members.some((m) => m.id === other.id));
+    if (existing) { openRoom(existing.id); setTab('mensajes'); return; }
+    api.post<ChatRoom>('/api/v1/chat/salas', { memberIds: [other.id] })
+      .then((room) => { fetchRooms(); openRoom(room.id); setTab('mensajes'); })
+      .catch(() => undefined);
   };
 
-  const assignRoutineTo = (athleteId: string, routineId: string) => {
-    const routine = routines.find((r) => r.id === routineId);
-    assignRoutine(athleteId, routine?.name ?? routineId);
+  const publish = async () => {
+    if (!meId) return;
+    if (!newText.trim() && !file) return;
+    setPublishing(true);
+    try {
+      let mediaUrl: string | null = null;
+      let mediaKind: 'IMAGE' | 'VIDEO' | null = null;
+      if (file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const up = await api.upload<{ url: string; mediaKind: 'IMAGE' | 'VIDEO' }>('/api/v1/media/upload', fd);
+        mediaUrl = up.url; mediaKind = up.mediaKind;
+      }
+      const payload: Record<string, unknown> = { type: mediaUrl ? 'MEDIA' : 'TEXT', text: newText.trim() };
+      if (mediaUrl) { payload.mediaUrl = mediaUrl; payload.mediaKind = mediaKind; if (mediaKind === 'VIDEO') payload.mediaDurationSec = videoDuration; }
+      await api.post('/api/v1/comunidad/posts', payload);
+      setNewText(''); setFile(null); setFilePreview(null); setVideoDuration(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      fetchFeed(feedFilter);
+    } finally { setPublishing(false); }
   };
 
-  const acceptFollow = (id: number) => {
-    setAcceptedFollows((prev) => [...prev, id]);
+  const toggleReaction = (post: ApiPost, key: ReactionKey) => {
+    const cur = myReactions[post.id]?.[key] ?? false;
+    setMyReactions((prev) => ({ ...prev, [post.id]: { ...prev[post.id], [key]: !cur } }));
+    setPosts((prev) => prev.map((p) => p.id === post.id ? {
+      ...p,
+      reactions: { ...p.reactions, [key]: Math.max(0, (p.reactions[key] ?? 0) + (cur ? -1 : 1)) },
+    } : p));
+    api.post('/api/v1/comunidad/posts/' + post.id + '/reacciones', { type: key }).catch(() => undefined);
   };
 
-  const rejectFollow = (id: number) => {
-    setFollowRequests((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const toggleReaction = (postId: string, key: ReactionKey) => {
-    setMyReactions((prev) => {
-      const active = prev[postId]?.[key] ?? false;
-      const next = {
-        ...prev,
-        [postId]: { ...prev[postId], [key]: !active },
-      };
-      setPosts((ps) =>
-        ps.map((p) =>
-          p.id === postId
-            ? {
-                ...p,
-                reactions: {
-                  ...p.reactions,
-                  [key]: Math.max(0, p.reactions[key] + (active ? -1 : 1)),
-                },
-              }
-            : p
-        )
-      );
-      syncReaction(postId, key);
-      return next;
-    });
-  };
-
-  const toggleComments = (postId: string) => {
-    setOpenComments((prev) => {
-      const next = new Set(prev);
-      if (next.has(postId)) next.delete(postId);
-      else next.add(postId);
-      return next;
-    });
-  };
-
-  const submitComment = (postId: string) => {
-    const text = (draft[postId] ?? '').trim();
+  const submitComment = (post: ApiPost) => {
+    const text = draft[post.id]?.trim();
     if (!text) return;
-    setPosts((ps) =>
-      ps.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              comments: [
-                ...p.comments,
-                { id: `local-${Date.now()}`, user: 'Juan Pérez', text },
-              ],
-            }
-          : p
-      )
-    );
-    setDraft((prev) => ({ ...prev, [postId]: '' }));
-    syncComment(postId, text);
+    const optimistic = { id: 'tmp-' + Date.now(), text, createdAt: new Date().toISOString(), author: { id: meId, name: meName, imageUrl: avatarUrl } as ApiUser };
+    setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, comments: [...p.comments, optimistic] } : p));
+    setDraft((prev) => ({ ...prev, [post.id]: '' }));
+    api.post('/api/v1/comunidad/posts/' + post.id + '/comentarios', { text }).catch(() => undefined);
   };
 
-  const publish = (e: FormEvent) => {
-    e.preventDefault();
-    const text = newText.trim();
-    if (!text) return;
-    const post: Post = {
-      id: `local-${Date.now()}`,
-      user: 'Juan Pérez',
-      role: 'player',
-      roleLabel: 'Jugador',
-      division: 'Platino',
-      text,
-      isg: 72,
-      media: newMedia ?? undefined,
-      reactions: { FIRE: 0, SKULL: 0, CROWN: 0 },
-      comments: [],
-    };
-    setPosts((prev) => [post, ...prev]);
-    setNewText('');
-    setNewMedia(null);
-    syncCreatePost(text, newMedia);
+  const follow = (authorId: string) => {
+    if (authorId === meId) return;
+    setFollowed((prev) => new Set(prev).add(authorId));
+    api.post('/api/v1/relaciones/solicitud', { addresseeId: authorId, type: 'FRIEND' }).catch(() => undefined);
   };
 
-  const syncCreatePost = (text: string, media: PostMedia | null) => {
-    void api
-      .post('/api/v1/comunidad/posts', {
-        type: 'MEDIA',
-        text,
-        mediaUrl: media ? `mock://${media.label}` : undefined,
-        mediaKind: media?.type === 'video' ? 'VIDEO' : media ? 'IMAGE' : undefined,
-        mediaDurationSec: media?.type === 'video' ? 15 : undefined,
-      })
+  const respondRequest = (id: string, status: 'ACCEPTED' | 'REJECTED') => {
+    api.put('/api/v1/relaciones/solicitud/' + id, { status })
+      .then(() => { fetchRequests(); fetchFriends(); })
       .catch(() => undefined);
   };
 
-  const syncReaction = (postId: string, key: ReactionKey) => {
-    void api
-      .post(`/api/v1/comunidad/posts/${postId}/reacciones`, { type: key })
-      .catch(() => undefined);
-  };
-
-  const syncComment = (postId: string, text: string) => {
-    void api
-      .post(`/api/v1/comunidad/posts/${postId}/comentarios`, { text })
-      .catch(() => undefined);
-  };
-
-  const openChat = (id: number) => {
-    setActiveChatId(id);
-    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)));
+  const doSearch = (q: string) => {
+    setSearchQuery(q);
+    if (!q.trim()) { setSearchResults([]); return; }
+    setSearching(true);
+    api.get<ApiUser[]>('/api/v1/relaciones/usuarios', { q })
+      .then((res) => setSearchResults(res.filter((u) => u.id !== meId)))
+      .catch(() => setSearchResults([]))
+      .finally(() => setSearching(false));
   };
 
   const sendMessage = () => {
+    if (!activeRoomId || !chatDraft.trim() || !meId) return;
     const text = chatDraft.trim();
-    if ((!text && !pendingAttachment) || activeChatId === null) return;
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === activeChatId
-          ? {
-              ...c,
-              messages: [
-                ...c.messages,
-                {
-                  id: Date.now(),
-                  from: 'me' as const,
-                  text,
-                  time: 'ahora',
-                  attachments: pendingAttachment ? [pendingAttachment] : undefined,
-                },
-              ],
-            }
-          : c
-      )
-    );
+    const optimistic = { id: 'tmp-' + Date.now(), roomId: activeRoomId, senderId: meId, text, createdAt: new Date().toISOString(), sender: { id: meId, name: meName, imageUrl: avatarUrl } as ApiUser };
+    setActiveMessages((prev) => [...prev, optimistic]);
+    setRooms((prev) => prev.map((r) => r.id === activeRoomId ? { ...r, lastMessage: { text, senderId: meId, createdAt: new Date().toISOString() } } : r));
     setChatDraft('');
-    setPendingAttachment(null);
-    setAttachMenuOpen(false);
+    api.post('/api/v1/chat/salas/' + activeRoomId + '/mensajes', { text }).catch(() => undefined);
   };
 
-  const toggleVoice = (messageId: number) => {
-    if (voicePlayingId === messageId) {
-      setVoicePlayingId(null);
-      setVoiceProgress((prev) => ({ ...prev, [messageId]: 0 }));
-    } else {
-      setVoicePlayingId(messageId);
-    }
-  };
+  const myPosts = posts.filter((p) => p.author.id === meId);
+  const linkedCount = isStaff ? linkedAthletes.length : friends.length;
+  const activeRoom = rooms.find((r) => r.id === activeRoomId) || null;
+  const unreadRooms = rooms.filter((r) => r.lastMessage && r.lastMessage.senderId !== meId).length;
 
-  useEffect(() => {
-    if (voicePlayingId === null) return;
-    const interval = setInterval(() => {
-      setVoiceProgress((prev) => {
-        const next = (prev[voicePlayingId] ?? 0) + 2;
-        if (next >= 100) {
-          setVoicePlayingId(null);
-          return { ...prev, [voicePlayingId]: 0 };
-        }
-        return { ...prev, [voicePlayingId]: next };
-      });
-    }, 120);
-    return () => clearInterval(interval);
-  }, [voicePlayingId]);
-
-  const unreadTotal = conversations.reduce((sum, c) => sum + c.unread, 0);
-  const activeConversation = conversations.find((c) => c.id === activeChatId) ?? null;
-
-  const TABS: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }[] = [
-    { key: 'feed', label: 'Feed', icon: Newspaper },
-    { key: 'amigos', label: 'Amigos', icon: Users, badge: followRequests.length },
-    { key: 'perfil', label: 'Perfil', icon: User },
-    { key: 'mensajes', label: 'Mensajes', icon: MessageSquare, badge: unreadTotal },
-    ...(isStaff
-      ? [{ key: 'solicitudes' as Tab, label: 'Solicitudes', icon: ClipboardList, badge: coachingRequests.length }]
-      : []),
+  const TABS: { id: Tab; label: string; icon: typeof Flame; badge?: number }[] = [
+    { id: 'feed', label: 'Feed', icon: Newspaper },
+    { id: 'amigos', label: 'Amigos', icon: Users, badge: requests.length },
+    ...(isStaff ? [{ id: 'solicitudes' as Tab, label: 'Solicitudes', icon: ClipboardList, badge: staffRequests.length }] : []),
+    { id: 'perfil', label: 'Perfil', icon: User },
+    { id: 'mensajes', label: 'Mensajes', icon: MessageSquare, badge: unreadRooms },
   ];
 
-  return (
-    <div className="flex h-[100dvh] min-h-0 flex-col bg-black text-white overflow-hidden">
-      {/* Header Fijo */}
-      <header className="flex-shrink-0 px-6 pb-4 pt-2">
-        <h1 className="text-2xl font-bold tracking-tight text-white">Comunidad</h1>
-        <p className="mt-0.5 text-sm font-medium text-white/40">Pantafit · Social</p>
+  const Avatar = ({ u, size = 40 }: { u: { name?: string; imageUrl?: string | null }; size?: number }) =>
+    u.imageUrl ? <img src={u.imageUrl} alt="" width={size} height={size} className="rounded-full object-cover" style={{ width: size, height: size }} />
+      : <div className="flex items-center justify-center rounded-full bg-[#1a1a1a] text-[#FBBF24] font-bold" style={{ width: size, height: size, fontSize: size * 0.4 }}>{initials(u.name)}</div>;
 
-        {/* Tabs superiores */}
-        <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const isActive = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={cn(
-                  'flex flex-shrink-0 items-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300',
-                  isActive
-                    ? 'bg-[#EF4444] text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]'
-                    : 'border border-white/5 bg-[#0D0D0D] text-white/50 hover:text-white'
-                )}
-                aria-pressed={isActive}
-              >
-                <Icon className="h-4 w-4" />
-                {t.label}
-                {typeof t.badge === 'number' && t.badge > 0 && (
-                  <span
-                    className={cn(
-                      'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-black',
-                      isActive ? 'bg-white text-[#EF4444]' : 'bg-[#EF4444] text-white'
-                    )}
-                  >
-                    {t.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+  return (
+    <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 text-white">
+      <header className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight">
+            <Flame className="text-[#EF4444]" /> <span className="text-[#FBBF24]">RANKED</span> FITNESS
+          </h1>
+          <p className="text-sm text-white/50">{roleLabel(me?.role)} · Comunidad</p>
         </div>
+        <button onClick={() => setTab('mensajes')} className="relative rounded-full border border-white/10 bg-[#1a1a1a] p-2.5"><MessageSquare className="h-5 w-5" />{unreadRooms > 0 && <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-[#EF4444] text-[10px] font-bold leading-4">{unreadRooms}</span>}</button>
       </header>
 
-      {/* Contenido con scroll interno */}
-      <div key={tab} className="flex-1 space-y-6 overflow-y-auto px-6 pb-48 scrollbar-hide animate-fade-slide">
-        {/* ===== FEED ===== */}
-        {tab === 'feed' && (
-          <>
-            {/* Filtros de feed: Siguiendo / Pantafit / Élite */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-              {FEED_FILTERS.map((f) => {
-                const isActive = feedFilter === f;
-                return (
-                  <button
-                    key={f}
-                    onClick={() => setFeedFilter(f)}
-                    className={cn(
-                      'flex flex-shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest transition-all duration-300',
-                      isActive
-                        ? 'bg-[#FBBF24] text-black shadow-[0_0_15px_rgba(251,191,36,0.35)]'
-                        : 'border border-white/5 bg-[#0D0D0D] text-white/50 hover:text-white'
-                    )}
-                    aria-pressed={isActive}
-                  >
-                    {f === 'elite' && <Crown className="h-3.5 w-3.5" />}
-                    {f === 'local' && <Building2 className="h-3.5 w-3.5" />}
-                    {f === 'following' && <Users className="h-3.5 w-3.5" />}
-                    {FILTER_LABEL[f]}
-                  </button>
-                );
-              })}
-            </div>
+      <nav className="mb-6 flex gap-2 overflow-x-auto">
+        {TABS.map((t) => {
+          const Icon = t.icon; const active = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'amigos') fetchFriends(); }}
+              className={cn('flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition', active ? 'bg-[#FBBF24] text-black' : 'bg-[#1a1a1a] text-white/70 hover:text-white')}>
+              <Icon className="h-4 w-4" />{t.label}
+              {t.badge ? <span className={cn('ml-1 rounded-full px-1.5 text-[10px] font-bold', active ? 'bg-black/20 text-black' : 'bg-[#EF4444] text-white')}>{t.badge}</span> : null}
+            </button>
+          );
+        })}
+      </nav>
 
-            {/* Composer */}
-            <form onSubmit={publish} className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border-2 border-[#FBBF24]/60 bg-[#FBBF24]/15 text-sm font-black text-[#FBBF24]">
-                  {initials(own.name)}
-                </div>
-                <textarea
-                  value={newText}
-                  onChange={(e) => setNewText(e.target.value)}
-                  placeholder="Comparte tu nuevo PR o estado..."
-                  rows={2}
-                  className="flex-1 resize-none rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm font-semibold text-white outline-none transition-all placeholder:text-white/25 focus:border-[#EF4444] focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]"
-                />
-              </div>
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setNewMedia((prev) =>
-                          prev?.type === 'image' ? null : { ...DEFAULT_IMAGE_MEDIA }
-                        )
-                      }
-                      className={cn(
-                        'flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-widest transition-all',
-                        newMedia?.type === 'image'
-                          ? 'border-[#EF4444]/50 bg-[#EF4444]/10 text-[#EF4444]'
-                          : 'border-white/10 bg-white/5 text-white/40 hover:text-white'
-                      )}
-                      aria-pressed={newMedia?.type === 'image'}
-                    >
-                      <ImagePlus className="h-3.5 w-3.5" />
-                      Imagen
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setNewMedia((prev) =>
-                          prev?.type === 'video' ? null : { ...DEFAULT_VIDEO_MEDIA }
-                        )
-                      }
-                      className={cn(
-                        'flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-widest transition-all',
-                        newMedia?.type === 'video'
-                          ? 'border-[#EF4444]/50 bg-[#EF4444]/10 text-[#EF4444]'
-                          : 'border-white/10 bg-white/5 text-white/40 hover:text-white'
-                      )}
-                      aria-pressed={newMedia?.type === 'video'}
-                    >
-                      <Video className="h-3.5 w-3.5" />
-                      Video
-                    </button>
-                  </div>
-                  <button
-                    type="submit"
-                    className="flex items-center gap-2 rounded-xl bg-[#EF4444] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-[#EF4444]/90 disabled:opacity-40 disabled:hover:bg-[#EF4444]"
-                    disabled={!newText.trim() && !newMedia}
-                  >
-                    <Send className="h-4 w-4" />
-                    Publicar
-                  </button>
-                </div>
-
-                {newMedia && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <div
-                      className={cn(
-                        'relative flex h-16 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br',
-                        newMedia.gradient
-                      )}
-                    >
-                      {newMedia.type === 'video' && (
-                        <span className="absolute inset-0 flex items-center justify-center">
-                          <Play className="h-5 w-5 text-white" fill="currentColor" />
-                        </span>
-                      )}
-                      {newMedia.type === 'image' ? (
-                        <ImagePlus className="h-6 w-6 text-white/60" />
-                      ) : (
-                        <Video className="h-6 w-6 text-white/60" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-bold uppercase tracking-widest text-white/60">
-                        {newMedia.label}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setNewMedia(null)}
-                        className="mt-1 text-xs font-bold text-[#EF4444] transition-all hover:text-[#EF4444]/80"
-                      >
-                        Quitar adjunto
-                      </button>
-                    </div>
+      {tab === 'feed' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-white/10 bg-[#111] p-4">
+            <div className="flex gap-3">
+              <Avatar u={{ name: meName, imageUrl: avatarUrl }} />
+              <div className="flex-1">
+                <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="¿Qué lograste hoy, guerrero?" rows={2}
+                  className="w-full resize-none rounded-xl border border-white/10 bg-[#0c0c0c] p-3 text-sm outline-none focus:border-[#FBBF24]/50" />
+                {filePreview && (
+                  <div className="relative mt-2">
+                    {videoDuration !== null && file?.type.startsWith('video') ? (
+                      <video src={filePreview} className="max-h-64 w-full rounded-xl" controls />
+                    ) : <img src={filePreview} className="max-h-64 w-full rounded-xl object-cover" alt="" />}
+                    <button onClick={() => { setFile(null); setFilePreview(null); setVideoDuration(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                      className="absolute right-2 top-2 rounded-full bg-black/70 p-1"><X className="h-4 w-4" /></button>
                   </div>
                 )}
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f) { const url = URL.createObjectURL(f); setFilePreview(url); if (f.type.startsWith('video')) { const v = document.createElement('video'); v.preload = 'metadata'; v.onloadedmetadata = () => setVideoDuration(Math.round(v.duration)); v.src = url; } } }} />
+                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:text-white"><ImagePlus className="h-4 w-4" />Foto/Video</button>
+                    {me?.locationProvince && <span className="flex items-center gap-1 text-xs text-white/40"><MapPin className="h-3 w-3" />{me.locationProvince}</span>}
+                  </div>
+                  <button onClick={publish} disabled={publishing || (!newText.trim() && !file)}
+                    className="flex items-center gap-1 rounded-full bg-[#FBBF24] px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
+                    {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Publicar
+                  </button>
+                </div>
               </div>
-            </form>
+            </div>
+          </div>
 
-            {/* Posts */}
-            {posts.map((post) => {
-              const isOpen = openComments.has(post.id);
-              return (
-                <article
-                  key={post.id}
-                  className="overflow-hidden rounded-[2rem] border border-white/5 bg-[#0D0D0D] transition-all hover:border-white/15"
-                >
-                  {/* Header post */}
-                  <div className="flex items-center gap-3 p-5 pb-0">
-                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border-2 border-white/10 bg-white/5 text-sm font-black text-white/70">
-                      {initials(post.user)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="flex flex-wrap items-center gap-x-2 text-sm font-bold text-white">
-                        {post.user}
-                        <span className={cn('text-[10px] font-bold uppercase tracking-widest', ROLE_COLOR[post.role])}>
-                          · {post.roleLabel}
-                        </span>
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        {post.division !== '—' && (
-                          <span
-                            className={cn(
-                              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest',
-                              DIVISION_BADGE[post.division] ?? DIVISION_BADGE.Plata
-                            )}
-                          >
-                            <Trophy className="h-2.5 w-2.5" />
-                            {post.division}
-                          </span>
-                        )}
-                        <span className="text-[10px] font-semibold text-white/30">hace 10 min</span>
-                      </div>
-                    </div>
-                  </div>
+          <div className="flex gap-2">
+            {FEED_FILTERS.map((f) => (
+              <button key={f} onClick={() => setFeedFilter(f)}
+                className={cn('rounded-full px-3 py-1 text-xs font-semibold', feedFilter === f ? 'bg-white/15 text-white' : 'bg-[#1a1a1a] text-white/50')}>{FILTER_LABEL[f]}</button>
+            ))}
+          </div>
 
-                  {/* Texto + ISG */}
-                  <div className="px-5 pt-4">
-                    <p className="text-sm font-semibold leading-relaxed text-white/90">{post.text}</p>
-                    {typeof post.isg === 'number' && (
-                      <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-[#FBBF24]/30 bg-[#FBBF24]/10 px-3 py-1 text-[11px] font-black text-[#FBBF24]">
-                        <Flame className="h-3 w-3" />
-                        +{post.isg} ISG
-                      </span>
-                    )}
-                  </div>
+          {loadingFeed ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-[#FBBF24]" /></div>
+            : posts.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">Aún no hay publicaciones. ¡Sé el primero en compartir tu progreso!</p>
+              : posts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow}
+                  isFollowed={followed.has(p.author.id)} showComments={openComments.has(p.id)}
+                  toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })}
+                  draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))}
+                  meId={meId} meName={meName} avatarUrl={avatarUrl} />)}
 
-                  {/* Media: imagen o video */}
-                  {post.media && (
-                    <div
-                      className={cn(
-                        'relative mx-5 mt-4 flex h-44 items-center justify-center overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br',
-                        post.media.gradient
-                      )}
-                    >
-                      {post.media.type === 'video' && (
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/10">
-                          <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/50 backdrop-blur-sm transition-transform hover:scale-110">
-                            <Play className="h-6 w-6 text-white" fill="currentColor" />
-                          </span>
-                        </span>
-                      )}
-                      <div className="flex flex-col items-center gap-2 text-white/50">
-                        {post.media.type === 'image' ? (
-                          <Dumbbell className="h-8 w-8" />
-                        ) : (
-                          <Video className="h-8 w-8" />
-                        )}
-                        <span className="text-xs font-bold uppercase tracking-widest">
-                          {post.media.label}
-                        </span>
-                      </div>
-                      {post.media.type === 'video' && post.media.duration && (
-                        <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[10px] font-bold text-white">
-                          <Play className="h-3 w-3" fill="currentColor" />
-                          {post.media.duration}
-                        </span>
-                      )}
-                    </div>
-                  )}
+        </div>
+      )}
 
-                  {/* Acciones */}
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      {REACTIONS.map((reaction) => {
-                        const active = myReactions[post.id]?.[reaction.key] ?? false;
-                        return (
-                          <button
-                            key={reaction.key}
-                            onClick={() => toggleReaction(post.id, reaction.key)}
-                            className={cn(
-                              'flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold uppercase tracking-widest transition-all',
-                              active
-                                ? reaction.activeClass
-                                : 'border-white/10 bg-white/5 text-white/40 hover:text-white'
-                            )}
-                            aria-pressed={active}
-                            aria-label={`${reaction.label}: ${post.reactions[reaction.key]}`}
-                          >
-                            <reaction.icon
-                              className={cn('h-4 w-4 transition-transform', active && 'scale-125')}
-                            />
-                            <span className="tabular-nums">{post.reactions[reaction.key]}</span>
-                          </button>
-                        );
-                      })}
-                      <button
-                        onClick={() => toggleComments(post.id)}
-                        className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-bold uppercase tracking-widest text-white/40 transition-all hover:text-white"
-                        aria-expanded={isOpen}
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        {post.comments.length}
+      {tab === 'amigos' && (
+        <div className="space-y-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+            <input value={searchQuery} onChange={(e) => doSearch(e.target.value)} placeholder="Buscar por nombre o email..." className="w-full rounded-full border border-white/10 bg-[#111] py-2.5 pl-10 pr-4 text-sm outline-none focus:border-[#FBBF24]/50" />
+          </div>
+
+          {searching && <p className="text-sm text-white/40">Buscando...</p>}
+          {searchResults.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-white/40">Resultados</p>
+              {searchResults.map((u) => (
+                <div key={u.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
+                  <Avatar u={u} />
+                  <div className="flex-1"><p className="font-semibold">{u.name || u.email}</p><p className={cn('text-xs', roleColor(u.role))}>{roleLabel(u.role)}</p></div>
+                  {followed.has(u.id) ? <span className="text-xs text-white/40">Solicitud enviada</span>
+                    : <button onClick={() => follow(u.id)} className="flex items-center gap-1 rounded-full bg-[#EF4444] px-3 py-1 text-xs font-semibold text-white"><UserPlus className="h-3 w-3" />Seguir</button>}
+                  <button onClick={() => startChatWith(u)} className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white"><MessageSquare className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {requests.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-white/40">Solicitudes de amistad</p>
+              {requests.map((r) => (
+                <div key={r.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
+                  <Avatar u={r.user} />
+                  <p className="flex-1 font-semibold">{r.user.name || r.user.email}</p>
+                  <button onClick={() => respondRequest(r.id, 'ACCEPTED')} className="rounded-full bg-[#FBBF24] p-2 text-black"><Check className="h-4 w-4" /></button>
+                  <button onClick={() => respondRequest(r.id, 'REJECTED')} className="rounded-full border border-white/10 p-2 text-white/60"><X className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase text-white/40">{isStaff ? 'Atletas vinculados' : 'Amigos'} ({linkedCount})</p>
+            {(isStaff ? linkedAthletes : friends.map((f) => f.user)).map((u) => (
+              <div key={u.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
+                <Avatar u={u} /><div className="flex-1"><p className="font-semibold">{u.name || u.email}</p><p className={cn('text-xs', roleColor(u.role))}>{roleLabel(u.role)}</p></div>
+                <button onClick={() => startChatWith(u)} className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white"><MessageSquare className="h-4 w-4" /></button>
+              </div>
+            ))}
+            {(isStaff ? linkedAthletes.length === 0 : friends.length === 0) && <p className="text-sm text-white/40">Sin conexiones todavía.</p>}
+          </div>
+        </div>
+      )}
+
+      {tab === 'solicitudes' && isStaff && (
+        <div className="space-y-2">
+          {staffRequests.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">No hay solicitudes de vinculación.</p>
+            : staffRequests.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
+                <Avatar u={r.user} /><div className="flex-1"><p className="font-semibold">{r.user.name || r.user.email}</p><p className="text-xs text-white/50">Quiere unirse a tu grupo</p></div>
+                <button onClick={() => respondRequest(r.id, 'ACCEPTED')} className="rounded-full bg-[#FBBF24] px-3 py-1 text-xs font-semibold text-black">Aceptar</button>
+                <button onClick={() => respondRequest(r.id, 'REJECTED')} className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">Rechazar</button>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {tab === 'perfil' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a1a1a] to-[#0c0c0c] p-6 text-center">
+            <div className="mx-auto mb-3"><Avatar u={{ name: meName, imageUrl: avatarUrl }} size={80} /></div>
+            <h2 className="text-xl font-bold">{meName}</h2>
+            <p className={cn('text-sm', roleColor(me?.role))}>{roleLabel(me?.role)}</p>
+            {me?.locationProvince && <p className="mt-1 flex items-center justify-center gap-1 text-xs text-white/40"><MapPin className="h-3 w-3" />{me.locationProvince}{me.locationCountry ? `, ${me.locationProvince ? '' : ''}${me.locationCountry}` : ''}</p>}
+            <div className="mt-4 flex justify-center gap-6">
+              <div><p className="text-2xl font-black text-[#FBBF24]">{myPosts.length}</p><p className="text-xs text-white/50">Publicaciones</p></div>
+              <div><p className="text-2xl font-black text-[#FBBF24]">{linkedCount}</p><p className="text-xs text-white/50">{isStaff ? 'Atletas' : 'Amigos'}</p></div>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase text-white/40">Mis publicaciones</p>
+            {myPosts.length === 0 ? <p className="text-sm text-white/40">Todavía no has publicado.</p>
+              : myPosts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow} isFollowed={false} showComments={openComments.has(p.id)} toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))} meId={meId} meName={meName} avatarUrl={avatarUrl} />)}
+          </div>
+        </div>
+      )}
+
+      {tab === 'mensajes' && (
+        <div className="rounded-2xl border border-white/10 bg-[#111]">
+          {!activeRoom && (
+            <div className="p-3">
+              <p className="mb-2 px-1 text-xs font-semibold uppercase text-white/40">Conversaciones</p>
+              {loadingRooms ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-[#FBBF24]" /></div>
+                : rooms.length === 0 ? <p className="px-1 text-sm text-white/40">Sin chats. Busca un amigo y pulsa el icono de mensaje.</p>
+                  : rooms.map((r) => {
+                    const other = r.members.find((m) => m.id !== meId);
+                    return (
+                      <button key={r.id} onClick={() => openRoom(r.id)} className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-white/5">
+                        <Avatar u={other ?? r} />
+                        <div className="flex-1 truncate"><p className="font-semibold">{other?.name || r.name || 'Grupo'}</p><p className="truncate text-xs text-white/50">{r.lastMessage?.text || 'Sin mensajes'}</p></div>
+                        {r.lastMessage && r.lastMessage.senderId !== meId && <span className="h-2 w-2 rounded-full bg-[#EF4444]" />}
                       </button>
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">
-                      {Object.values(post.reactions).reduce((a, b) => a + b, 0)} reacciones
-                    </span>
-                  </div>
-
-                  {/* Comentarios */}
-                  {isOpen && (
-                    <div className="space-y-3 border-t border-white/5 bg-black/30 px-5 py-4">
-                      {post.comments.length > 0 && (
-                        <ul className="space-y-2.5">
-                          {post.comments.map((comment) => (
-                            <li key={comment.id} className="flex items-start gap-2.5">
-                              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white/5 text-[9px] font-black text-white/50">
-                                {initials(comment.user)}
-                              </div>
-                              <div className="rounded-xl bg-white/5 px-3 py-2">
-                                <p className="text-xs font-bold text-white">{comment.user}</p>
-                                <p className="text-xs text-white/60">{comment.text}</p>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={draft[post.id] ?? ''}
-                          onChange={(e) => setDraft((prev) => ({ ...prev, [post.id]: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') submitComment(post.id);
-                          }}
-                          placeholder="Escribe un comentario..."
-                          className="flex-1 rounded-xl border border-white/10 bg-black/50 px-3.5 py-2.5 text-sm font-semibold text-white outline-none transition-all placeholder:text-white/25 focus:border-[#EF4444]"
-                        />
-                        <button
-                          onClick={() => submitComment(post.id)}
-                          className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EF4444] text-white transition-all hover:bg-[#EF4444]/90"
-                          aria-label="Enviar comentario"
-                        >
-                          <Send className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </>
-        )}
-
-        {/* ===== AMIGOS ===== */}
-        {tab === 'amigos' && (
-          <>
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-6">
-              <div className="flex items-center justify-between">
-                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                  <Users className="h-4 w-4 text-[#EF4444]" />
-                  Tus amigos
-                </p>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/50">
-                  {friends.length} amigos
-                </span>
-              </div>
-
-              {friends.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-10 text-center">
-                  <UserCheck className="mx-auto h-8 w-8 text-white/15" />
-                  <p className="mt-2 text-sm text-white/40">Aún no tienes amigos</p>
-                </div>
-              ) : (
-                <ul className="mt-4 space-y-3">
-                  {friends.map((friend) => (
-                    <li
-                      key={friend.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/5 p-4 transition-all hover:border-white/15"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="relative flex-shrink-0">
-                          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 text-sm font-black text-white/60">
-                            {initials(friend.name)}
-                          </span>
-                          <span
-                            className={cn(
-                              'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D0D]',
-                              friend.online ? 'bg-green-500' : 'bg-white/20'
-                            )}
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-white">{friend.name}</p>
-                          <span
-                            className={cn(
-                              'mt-1 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest',
-                              DIVISION_BADGE[friend.division] ?? DIVISION_BADGE.Plata
-                            )}
-                          >
-                            <Trophy className="h-2.5 w-2.5" />
-                            {friend.division}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        className={cn(
-                          'flex-shrink-0 text-[10px] font-bold uppercase tracking-widest',
-                          friend.online ? 'text-green-400' : 'text-white/30'
-                        )}
-                      >
-                        {friend.online ? 'En línea' : 'Offline'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-6">
-              <div className="flex items-center justify-between">
-                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                  <UserPlus className="h-4 w-4 text-[#EF4444]" />
-                  Solicitudes de amistad / seguimiento
-                </p>
-                <span className="rounded-full border border-[#EF4444]/40 bg-[#EF4444]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#EF4444]">
-                  {followRequests.length} pendientes
-                </span>
-              </div>
-
-              {followRequests.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-10 text-center">
-                  <UserCheck className="mx-auto h-8 w-8 text-white/15" />
-                  <p className="mt-2 text-sm text-white/40">Sin solicitudes pendientes</p>
-                </div>
-              ) : (
-                <ul className="mt-4 space-y-3">
-                  {followRequests.map((req) => {
-                    const isAccepted = acceptedFollows.includes(req.id);
-                    return (
-                      <li
-                        key={req.id}
-                        className={cn(
-                          'flex flex-col gap-3 rounded-2xl border p-4 transition-all sm:flex-row sm:items-center',
-                          isAccepted ? 'border-green-500/40 bg-green-950/20' : 'border-white/5 bg-white/5'
-                        )}
-                      >
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white/5 text-sm font-black text-white/60">
-                            {initials(req.user)}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-white">{req.user}</p>
-                            <p className="truncate text-xs text-white/40">{req.note}</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {isAccepted ? (
-                            <span className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-green-500/50 bg-green-950/40 px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-green-200 sm:flex-none">
-                              <Check className="h-4 w-4" />
-                              Aceptado
-                            </span>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => acceptFollow(req.id)}
-                                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#EF4444] px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-[#EF4444]/90 sm:flex-none"
-                              >
-                                <Check className="h-4 w-4" />
-                                Aceptar
-                              </button>
-                              <button
-                                onClick={() => rejectFollow(req.id)}
-                                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white/40 transition-all hover:border-[#EF4444]/50 hover:text-[#EF4444] sm:flex-none"
-                              >
-                                <X className="h-4 w-4" />
-                                Rechazar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </li>
                     );
                   })}
-                </ul>
-              )}
             </div>
-          </>
-        )}
+          )}
 
-        {/* ===== SOLICITUDES (Entrenador / Isla) ===== */}
-        {tab === 'solicitudes' && (
-          <>
-            {/* Solicitudes de coaching entrantes */}
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <ClipboardList className="h-5 w-5 text-[#FBBF24]" />
-                <h2 className="text-sm font-black uppercase tracking-widest text-white">
-                  Solicitudes de coaching
-                </h2>
+          {activeRoom && (
+            <div className="flex h-[70vh] flex-col">
+              <div className="flex items-center gap-3 border-b border-white/10 p-3">
+                <button onClick={() => setActiveRoomId(null)} className="rounded-full border border-white/10 p-1.5"><ArrowLeft className="h-4 w-4" /></button>
+                <Avatar u={activeRoom.members.find((m) => m.id !== meId) ?? activeRoom} />
+                <p className="font-semibold">{activeRoom.members.find((m) => m.id !== meId)?.name || activeRoom.name || 'Grupo'}</p>
               </div>
-              {coachingRequests.length === 0 ? (
-                <p className="py-6 text-center text-xs font-semibold text-white/40">
-                  No hay solicitudes pendientes.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {coachingRequests.map((req) => {
-                    return (
-                      <li
-                        key={req.id}
-                        className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#FBBF24]/30 to-[#EF4444]/20 text-[11px] font-black text-white">
-                            {initials(req.name)}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-white">{req.name}</p>
-                            <p className="truncate text-xs font-semibold text-white/40">{req.note}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => acceptCoach(req.id)}
-                              className="flex items-center gap-1 rounded-xl bg-[#FBBF24] px-3.5 py-2 text-xs font-black uppercase tracking-widest text-black transition-all hover:bg-[#fcd34d] active:scale-95"
-                            >
-                              <Check className="h-3.5 w-3.5" /> Aceptar
-                            </button>
-                            <button
-                              onClick={() => rejectCoach(req.id)}
-                              className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-black uppercase tracking-widest text-white/40 transition-all hover:text-[#EF4444] active:scale-95"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-
-            {/* Atletas vinculados + asignación de rutinas */}
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <Users className="h-5 w-5 text-[#EF4444]" />
-                <h2 className="text-sm font-black uppercase tracking-widest text-white">
-                  Atletas vinculados
-                </h2>
-              </div>
-              {athletes.length === 0 ? (
-                <p className="py-6 text-center text-xs font-semibold text-white/40">
-                  Aún no tenés atletas vinculados. Aceptá una solicitud para comenzar.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {athletes.map((athlete) => (
-                    <li key={athlete.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#EF4444]/30 to-[#FBBF24]/20 text-[11px] font-black text-white">
-                          {initials(athlete.name)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-white">{athlete.name}</p>
-                          <p className="truncate text-xs font-semibold text-white/40">
-                            {role === 'coach' ? 'Jugador bajo tu plan' : 'Miembro de la isla'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2">
-                        <Dumbbell className="h-4 w-4 flex-shrink-0 text-white/30" />
-                        <select
-                          value={routineAssignments[athlete.id] ?? ''}
-                          onChange={(e) => assignRoutineTo(athlete.id, e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#FBBF24]"
-                        >
-                          <option value="">Asignar rutina…</option>
-                          {routines.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {routineAssignments[athlete.id] && (
-                        <p className="mt-2 flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-[#FBBF24]">
-                          <Check className="h-3.5 w-3.5" /> Rutina asignada
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* ===== PERFIL ===== */}
-        {tab === 'perfil' && (
-          <>
-            {/* Hero del perfil */}
-            <div className="rounded-[2rem] border border-white/10 bg-gradient-to-r from-[#0D0D0D] to-[#1a1a1a] p-6 shadow-2xl">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-3xl border-2 border-[#FBBF24]/60 bg-[#FBBF24]/15 text-xl font-black text-[#FBBF24]">
-                    {initials(own.name)}
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="break-words text-xl font-bold tracking-tight text-white">{own.name}</h2>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-[#FBBF24]/60 bg-[#FBBF24]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#FBBF24]">
-                        <Crown className="h-3 w-3" />
-                        {own.division.name}
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                        <ShieldCheck className="h-3 w-3" />
-                        Jugador
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/40">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {own.location.country} · {own.location.province}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Building2 className="h-3.5 w-3.5" />
-                        Pantafit
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-shrink-0 flex-col items-end">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                    Score ISG
-                  </span>
-                  <span className="text-4xl font-black tracking-tighter text-[#FBBF24]">
-                    {own.isgScore.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Estadísticas */}
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-6">
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                <TrendingUp className="h-4 w-4 text-[#FBBF24]" />
-                Estadísticas de rendimiento
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                  <Target className="h-4 w-4 text-[#EF4444]" />
-                  <p className="mt-2 text-2xl font-black tracking-tighter text-white">18</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">PRs</p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                  <CalendarCheck className="h-4 w-4 text-[#EF4444]" />
-                  <p className="mt-2 text-2xl font-black tracking-tighter text-white">112</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Sesiones</p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                  <Flame className="h-4 w-4 text-[#EF4444]" />
-                  <p className="mt-2 text-2xl font-black tracking-tighter text-white">9</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Racha</p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                  <Dumbbell className="h-4 w-4 text-[#EF4444]" />
-                  <p className="mt-2 text-2xl font-black tracking-tighter text-white">74%</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Win rate</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Datos corporales */}
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-6">
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                <User className="h-4 w-4 text-[#EF4444]" />
-                Datos corporales
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[
-                  { label: 'Peso corporal', value: `${own.weightKg} kg` },
-                  { label: 'Altura', value: `${own.heightCm} cm` },
-                  { label: 'Edad', value: `${own.age} años` },
-                  { label: 'Gimnasio', value: 'Pantafit' },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                    <p className="text-xl font-black tracking-tighter text-white">{item.value}</p>
-                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                      {item.label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Progreso semanal */}
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-6">
-              <div className="flex items-center justify-between">
-                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                  <TrendingUp className="h-4 w-4 text-[#FBBF24]" />
-                  Volumen semanal
-                </p>
-                <span className="rounded-full border border-[#FBBF24]/40 bg-[#FBBF24]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#FBBF24]">
-                  +12% esta semana
-                </span>
-              </div>
-              <div className="mt-5 flex items-end justify-between gap-2">
-                {WEEK_PROGRESS.map((d, i) => (
-                  <div key={d.day} className="flex flex-1 flex-col items-center gap-2">
-                    <div className="flex h-24 w-full items-end overflow-hidden rounded-xl bg-white/5">
-                      <div
-                        className={cn(
-                          'w-full rounded-xl transition-all duration-300',
-                          i % 2 === 0 ? 'bg-[#EF4444]' : 'bg-[#FBBF24]',
-                          d.pct === 100 && 'shadow-[0_0_15px_rgba(251,191,36,0.4)]'
-                        )}
-                        style={{ height: `${d.pct}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                      {d.day}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ===== MENSAJES ===== */}
-        {tab === 'mensajes' && (
-          activeConversation === null ? (
-            <div className="rounded-[2rem] border border-white/10 bg-[#0D0D0D] p-6">
-              <div className="flex items-center justify-between">
-                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                  <MessageSquare className="h-4 w-4 text-[#EF4444]" />
-                  Bandeja de mensajes
-                </p>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/50">
-                  {conversations.length} chats
-                </span>
-              </div>
-
-              {conversations.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-10 text-center">
-                  <MessageSquare className="mx-auto h-8 w-8 text-white/15" />
-                  <p className="mt-2 text-sm text-white/40">Sin conversaciones todavía</p>
-                </div>
-              ) : (
-                <ul className="mt-4 space-y-3">
-                  {conversations.map((chat) => {
-                    const lastMessage = chat.messages[chat.messages.length - 1];
-                    return (
-                      <li key={chat.id}>
-                        <button
-                          onClick={() => openChat(chat.id)}
-                          className="flex w-full items-center gap-3 rounded-2xl border border-white/5 bg-white/5 p-4 text-left transition-all hover:border-white/15"
-                        >
-                          <div className="relative flex-shrink-0">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 text-sm font-black text-white/60">
-                              {initials(chat.user)}
-                            </span>
-                            <span
-                              className={cn(
-                                'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D0D]',
-                                chat.online ? 'bg-green-500' : 'bg-white/20'
-                              )}
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="truncate text-sm font-bold text-white">{chat.user}</p>
-                              <span className="flex-shrink-0 text-[10px] font-semibold text-white/30">
-                                {lastMessage?.time}
-                              </span>
-                            </div>
-                            <div className="mt-0.5 flex items-center justify-between gap-2">
-                              <p className="truncate text-xs text-white/40">{lastMessage?.text}</p>
-                              {chat.unread > 0 && (
-                                <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#EF4444] px-1.5 text-[10px] font-black text-white">
-                                  {chat.unread}
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/30">
-                              {chat.roleLabel}
-                            </p>
-                          </div>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-[64dvh] min-h-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#0D0D0D]">
-              {/* Header del chat */}
-              <div className="flex flex-shrink-0 items-center gap-3 border-b border-white/5 p-4">
-                <button
-                  onClick={() => setActiveChatId(null)}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/5 bg-black/40 text-white/60 transition-all hover:text-white"
-                  aria-label="Volver a la bandeja"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-                <div className="relative flex-shrink-0">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-sm font-black text-white/60">
-                    {initials(activeConversation.user)}
-                  </span>
-                  <span
-                    className={cn(
-                      'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D0D]',
-                      activeConversation.online ? 'bg-green-500' : 'bg-white/20'
-                    )}
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-white">{activeConversation.user}</p>
-                  <p className="truncate text-[10px] font-bold uppercase tracking-widest text-white/40">
-                    {activeConversation.roleLabel}
-                    <span className="ml-2 font-semibold normal-case text-white/30">
-                      {activeConversation.online ? '· En línea' : ''}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Mensajes */}
-              <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4 scrollbar-hide">
-                {activeConversation.messages.map((message) => {
-                  const isMine = message.from === 'me';
-                  const isVoicePlaying = voicePlayingId === message.id;
-                  const progress = voiceProgress[message.id] ?? 0;
+              <div className="flex-1 space-y-2 overflow-y-auto p-3">
+                {activeMessages.map((m) => {
+                  const mine = m.senderId === meId;
                   return (
-                    <div key={message.id} className={cn('flex', isMine ? 'justify-end' : 'justify-start')}>
-                      <div
-                        className={cn(
-                          'max-w-[80%] rounded-2xl px-4 py-2.5',
-                          isMine
-                            ? 'border border-[#EF4444]/40 bg-[#EF4444]/15 text-white'
-                            : 'border border-white/5 bg-white/5 text-white/90'
-                        )}
-                      >
-                        {message.text && (
-                          <p className="text-sm font-semibold leading-relaxed">{message.text}</p>
-                        )}
-
-                        {message.attachments?.map((att) => (
-                          <div key={`${message.id}-${att.type}`}>
-                            {att.type === 'voice' && (
-                              <div
-                                className={cn(
-                                  'mt-2 flex items-center gap-3 rounded-2xl border px-3 py-2.5',
-                                  isMine
-                                    ? 'border-[#EF4444]/30 bg-[#EF4444]/10'
-                                    : 'border-white/5 bg-black/40'
-                                )}
-                              >
-                                <button
-                                  onClick={() => toggleVoice(message.id)}
-                                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#EF4444] text-white transition-transform hover:scale-105"
-                                  aria-label={isVoicePlaying ? 'Pausar nota de voz' : 'Reproducir nota de voz'}
-                                >
-                                  {isVoicePlaying ? (
-                                    <Pause className="h-4 w-4" fill="currentColor" />
-                                  ) : (
-                                    <Play className="h-4 w-4 pl-0.5" fill="currentColor" />
-                                  )}
-                                </button>
-                                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                                  <div className="flex h-7 items-center gap-0.5">
-                                    {WAVEFORM_BARS.map((height, i) => {
-                                      const isReached = isVoicePlaying && (i / WAVEFORM_BARS.length) * 100 <= progress;
-                                      return (
-                                        <span
-                                          key={i}
-                                          className={cn(
-                                            'w-1 rounded-full transition-all duration-150',
-                                            i % 2 === 0 ? 'bg-[#EF4444]' : 'bg-[#FBBF24]',
-                                            isVoicePlaying && isReached && 'opacity-100',
-                                            isVoicePlaying && !isReached && 'opacity-30',
-                                            !isVoicePlaying && 'opacity-50'
-                                          )}
-                                          style={{ height: `${height}px` }}
-                                        />
-                                      );
-                                    })}
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className={cn('text-[10px] font-bold uppercase tracking-widest', isMine ? 'text-[#FBBF24]/80' : 'text-white/40')}>
-                                      {isVoicePlaying ? 'Reproduciendo...' : 'Nota de voz'}
-                                    </span>
-                                    <span className={cn('text-[10px] font-semibold', isMine ? 'text-white/50' : 'text-white/30')}>
-                                      {att.duration}
-                                    </span>
-                                  </div>
-                                  <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
-                                    <div
-                                      className="h-full rounded-full bg-[#FBBF24] transition-all duration-150"
-                                      style={{ width: `${progress}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {att.type === 'image' && (
-                              <div className="mt-2 flex h-36 items-center justify-center rounded-2xl border border-white/5 bg-gradient-to-br from-[#1a1a1a] via-[#FBBF24]/15 to-[#0D0D0D]">
-                                <div className="flex flex-col items-center gap-1.5 text-white/50">
-                                  <ImagePlus className="h-7 w-7" />
-                                  <span className="px-2 text-center text-[10px] font-bold uppercase tracking-widest">
-                                    {att.label ?? 'Imagen'}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-
-                            {att.type === 'video' && (
-                              <div className="relative mt-2 flex h-36 items-center justify-center overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-[#0D0D0D] via-[#38BDF8]/15 to-[#1a1a1a]">
-                                <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/50 backdrop-blur-sm">
-                                  <Play className="h-5 w-5 text-white" fill="currentColor" />
-                                </span>
-                                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-3 pb-2 text-[10px] font-bold text-white/80">
-                                  <span className="flex items-center gap-1 uppercase tracking-widest">
-                                    <Video className="h-3 w-3" />
-                                    {att.label ?? 'Video'}
-                                  </span>
-                                  {att.duration && (
-                                    <span className="rounded-full bg-black/60 px-2 py-0.5">{att.duration}</span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-
-                        <p className={cn('mt-1 text-right text-[10px] font-semibold', isMine ? 'text-[#FBBF24]/70' : 'text-white/30')}>
-                          {message.time}
-                        </p>
+                    <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+                      <div className={cn('max-w-[75%] rounded-2xl px-3 py-2 text-sm', mine ? 'bg-[#FBBF24] text-black' : 'bg-[#1a1a1a] text-white')}>
+                        {m.mediaUrl && (mediaKindOf({ mediaUrl: m.mediaUrl, mediaKind: m.mediaKind } as ApiPost) === 'VIDEO'
+                          ? <video src={m.mediaUrl} controls className="mb-1 max-h-48 rounded-lg" />
+                          : <img src={m.mediaUrl} alt="" className="mb-1 max-h-48 rounded-lg" />)}
+                        {m.text && <p>{m.text}</p>}
+                        <p className={cn('mt-1 text-[10px]', mine ? 'text-black/50' : 'text-white/30')}>{timeAgo(m.createdAt)}</p>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Input */}
-              <div className="flex flex-shrink-0 flex-col border-t border-white/5 p-4">
-                {pendingAttachment && (
-                  <div className="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <div className="flex h-12 w-16 flex-shrink-0 items-center justify-center rounded-xl border border-white/5 bg-gradient-to-br from-[#1a1a1a] via-[#EF4444]/15 to-[#0D0D0D]">
-                      {pendingAttachment.type === 'voice' ? (
-                        <Mic className="h-5 w-5 text-[#EF4444]" />
-                      ) : pendingAttachment.type === 'video' ? (
-                        <Play className="h-5 w-5 text-white/70" fill="currentColor" />
-                      ) : (
-                        <ImagePlus className="h-5 w-5 text-white/70" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-bold uppercase tracking-widest text-white/60">
-                        {pendingAttachment.type === 'voice'
-                          ? `Nota de voz · ${pendingAttachment.duration}`
-                          : pendingAttachment.label ?? pendingAttachment.type}
-                      </p>
-                      <button
-                        onClick={() => setPendingAttachment(null)}
-                        className="mt-1 text-xs font-bold text-[#EF4444] transition-all hover:text-[#EF4444]/80"
-                      >
-                        Quitar adjunto
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <button
-                      onClick={() => setAttachMenuOpen((v) => !v)}
-                      className={cn(
-                        'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-all',
-                        attachMenuOpen
-                          ? 'border-[#EF4444]/50 bg-[#EF4444]/10 text-[#EF4444]'
-                          : 'border-white/10 bg-black/50 text-white/40 hover:text-white'
-                      )}
-                      aria-label="Adjuntar archivo"
-                      aria-expanded={attachMenuOpen}
-                    >
-                      <Paperclip className="h-4 w-4" />
-                    </button>
-                    {attachMenuOpen && (
-                      <div className="absolute bottom-full left-0 z-20 mb-2 w-40 space-y-1 rounded-2xl border border-white/10 bg-[#0D0D0D] p-2 shadow-xl">
-                        <button
-                          onClick={() => {
-                            setPendingAttachment({ type: 'image', label: 'Imagen' });
-                            setAttachMenuOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest text-white/60 transition-all hover:bg-white/5 hover:text-white"
-                        >
-                          <ImagePlus className="h-4 w-4" />
-                          Imagen
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPendingAttachment({ type: 'video', label: 'Video', duration: '00:15' });
-                            setAttachMenuOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest text-white/60 transition-all hover:bg-white/5 hover:text-white"
-                        >
-                          <Video className="h-4 w-4" />
-                          Video
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setPendingAttachment({ type: 'voice', label: 'Nota de voz', duration: '0:08' })}
-                    className={cn(
-                      'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-all',
-                      pendingAttachment?.type === 'voice'
-                        ? 'border-[#EF4444]/50 bg-[#EF4444]/10 text-[#EF4444]'
-                        : 'border-white/10 bg-black/50 text-white/40 hover:text-[#EF4444]'
-                    )}
-                    aria-label="Grabar nota de voz"
-                  >
-                    <Mic className="h-4 w-4" />
-                  </button>
-                  <input
-                    value={chatDraft}
-                    onChange={(e) => setChatDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') sendMessage();
-                    }}
-                    placeholder="Escribe un mensaje..."
-                    className="flex-1 rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm font-semibold text-white outline-none transition-all placeholder:text-white/25 focus:border-[#EF4444]"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-[#EF4444] text-white transition-all hover:bg-[#EF4444]/90 disabled:opacity-40"
-                    disabled={!chatDraft.trim() && !pendingAttachment}
-                    aria-label="Enviar mensaje"
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                </div>
+              <div className="flex items-center gap-2 border-t border-white/10 p-3">
+                <input value={chatDraft} onChange={(e) => setChatDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Escribe un mensaje..." className="flex-1 rounded-full border border-white/10 bg-[#0c0c0c] px-4 py-2 text-sm outline-none focus:border-[#FBBF24]/50" />
+                <button onClick={sendMessage} className="rounded-full bg-[#FBBF24] p-2.5 text-black"><Send className="h-4 w-4" /></button>
               </div>
             </div>
-          )
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
+
+
+
+
+
+
+
+

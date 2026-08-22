@@ -10,6 +10,7 @@ import { AuditModule } from '../modules/audit/audit.module';
 import { RelationsModule } from '../modules/relations/relations.module';
 import { CommunityModule } from '../modules/community/community.module';
 import { ChatModule } from '../modules/chat/chat.module';
+import { MediaModule } from '../modules/media/media.module';
 import { RoutinesModule } from '../modules/routines/routines.module';
 import { ActiveViewGuard } from '../modules/auth/guards/active-view.guard';
 import { AppController } from './app.controller';
@@ -27,6 +28,7 @@ import { AppService } from './app.service';
     RelationsModule,
     CommunityModule,
     ChatModule,
+    MediaModule,
     RoutinesModule,
   ],
   controllers: [AppController],

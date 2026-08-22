@@ -51,6 +51,12 @@ export class RelationsController {
     return this.relationsService.listConnections(user.id);
   }
 
+  @Get('usuarios')
+  @ApiOperation({ summary: 'Buscar usuarios por nombre o email (excluye al propio)' })
+  searchUsers(@CurrentUser() user: any, @Query('q') q?: string) {
+    return this.relationsService.searchUsers(user.id, q);
+  }
+
   @Get('coach/atletas')
   @UseGuards(RolesGuard)
   @Roles('TRAINER', 'GYM_ADMIN', 'SUPER_ADMIN')
