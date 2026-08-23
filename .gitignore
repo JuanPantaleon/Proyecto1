@@ -2,5 +2,6 @@ node_modules/
 *.local/
 *.db
 *.pem
-env/*.env
 .env
+.env.local
+.next/
