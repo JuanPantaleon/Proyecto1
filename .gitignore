@@ -3,3 +3,4 @@ node_modules/
 *.db
 *.pem
 env/*.env
+.env
