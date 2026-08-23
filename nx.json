@@ -84,7 +84,6 @@
       }
     }
   ],
-  "nxCloudId": "6a80cc5a6e120d7a3a6932eb",
   "analytics": false,
   "generators": {
     "@nx/react": {

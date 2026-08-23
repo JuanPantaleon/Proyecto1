@@ -37,10 +37,16 @@ function timeAgo(iso?: string): string {
   return new Date(iso).toLocaleDateString();
 }
 const roleLabel = (r?: string | null): string => {
-  switch (r) { case 'TRAINER': case 'SUPER_ADMIN': return 'Entrenador/a'; case 'GYM_ADMIN': return 'Gimnasio'; case 'OWNER': return 'Admin'; default: return 'Jugador'; }
+  switch (r) {
+    case 'TRAINER': case 'SUPER_ADMIN': return 'Entrenador/a';
+    case 'GYM_ADMIN': return 'Gimnasio';
+    case 'OWNER': return 'Admin';
+    default: return 'Jugador';
+  }
 };
 const roleColor = (r?: string | null): string =>
-  r === 'TRAINER' || r === 'SUPER_ADMIN' || r === 'OWNER' ? 'text-[#38BDF8]' : r === 'GYM_ADMIN' ? 'text-[#EF4444]' : 'text-[#FBBF24]';
+  r === 'TRAINER' || r === 'SUPER_ADMIN' || r === 'OWNER' ? 'text-[#38BDF8]' :
+  r === 'GYM_ADMIN' ? 'text-[#EF4444]' : 'text-[#FBBF24]';
 const mediaKindOf = (p: ApiPost): 'IMAGE' | 'VIDEO' | null => {
   if (p.mediaKind) return p.mediaKind as 'IMAGE' | 'VIDEO';
   if (p.mediaUrl?.match(/\.(mp4|webm|ogg)$/i)) return 'VIDEO';
@@ -50,13 +56,27 @@ const mediaKindOf = (p: ApiPost): 'IMAGE' | 'VIDEO' | null => {
 const REACTIONS: { key: ReactionKey; label: string; icon: typeof Flame; activeClass: string }[] = [
   { key: 'FIRE', label: 'Respeto', icon: Flame, activeClass: 'border-[#EF4444]/60 bg-[#EF4444]/15 text-[#EF4444]' },
   { key: 'SKULL', label: 'Brutal', icon: Skull, activeClass: 'border-white/40 bg-white/10 text-white' },
-  { key: 'CROWN', label: 'Élite', icon: Crown, activeClass: 'border-[#FBBF24]/60 bg-[#FBBF24]/15 text-[#FBBF24]' },
+  { key: 'CROWN', label: 'Legendario', icon: Crown, activeClass: 'border-[#FBBF24]/60 bg-[#FBBF24]/15 text-[#FBBF24]' },
 ];
 const FEED_FILTERS: FeedFilter[] = ['all', 'following', 'local', 'elite'];
-const FILTER_LABEL: Record<FeedFilter, string> = { all: 'Todo', following: 'Siguiendo', local: 'Mi gimnasio', elite: 'Élite' };
+const FILTER_LABEL: Record<FeedFilter, string> = { all: 'Todo', following: 'Siguiendo', local: 'Mi gimnasio', elite: 'Legendario' };
 
-function PostCard({ post, onReact, onComment, onFollow, isFollowed, showComments, toggleComments, draft, setDraft, meId, meName, avatarUrl }:
-  { post: ApiPost; onReact: (p: ApiPost, k: ReactionKey) => void; onComment: (p: ApiPost) => void; onFollow: (id: string) => void; isFollowed: boolean; showComments: boolean; toggleComments: (id: string) => void; draft: string; setDraft: (p: string, v: string) => void; meId?: string; meName: string; avatarUrl?: string | null }) {
+function PostCard({
+  post, onReact, onComment, onFollow, isFollowed, showComments, toggleComments, draft, setDraft, meId, meName, avatarUrl
+}: {
+  post: ApiPost;
+  onReact: (p: ApiPost, k: ReactionKey) => void;
+  onComment: (p: ApiPost) => void;
+  onFollow: (id: string) => void;
+  isFollowed: boolean;
+  showComments: boolean;
+  toggleComments: (id: string) => void;
+  draft: string;
+  setDraft: (p: string, v: string) => void;
+  meId?: string;
+  meName: string;
+  avatarUrl?: string | null;
+}) {
   const kind = mediaKindOf(post);
   return (
     <div className="rounded-2xl border border-white/10 bg-[#111] p-4">
@@ -64,7 +84,7 @@ function PostCard({ post, onReact, onComment, onFollow, isFollowed, showComments
         <img src={post.author.imageUrl ?? undefined} alt="" className="h-10 w-10 rounded-full bg-[#1a1a1a] object-cover" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{post.author.name || 'Usuario'}</p>
-          <p className={cn('text-xs', roleColor(post.author.role))}>{roleLabel(post.author.role)} · {timeAgo(post.createdAt)}</p>
+          <p className={cn('text-xs', roleColor(post.author.role))}>{roleLabel(post.author.role)} �� {timeAgo(post.createdAt)}</p>
         </div>
         {post.author.id !== meId && (
           <button onClick={() => onFollow(post.author.id)} disabled={isFollowed}
@@ -88,14 +108,15 @@ function PostCard({ post, onReact, onComment, onFollow, isFollowed, showComments
       {(post.liftName || post.weightKg) && (
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           {post.liftName && <span className="rounded-full bg-[#FBBF24]/15 px-2 py-1 font-semibold text-[#FBBF24]">{post.liftName}</span>}
-          {post.weightKg != null && <span className="rounded-full bg-white/10 px-2 py-1">{post.weightKg} kg{post.reps != null ? ` × ${post.reps}` : ''}</span>}
+          {post.weightKg != null && <span className="rounded-full bg-white/10 px-2 py-1">{post.weightKg} kg{post.reps != null ? ` �- ${post.reps}` : ''}</span>}
           {post.isgScore != null && <span className="rounded-full bg-[#38BDF8]/15 px-2 py-1 text-[#38BDF8]">ISG {Math.round(post.isgScore)}</span>}
         </div>
       )}
 
       <div className="mt-4 flex items-center gap-2">
         {REACTIONS.map((r) => {
-          const Icon = r.icon; const active = post.myReactions?.[r.key];
+          const Icon = r.icon;
+          const active = post.myReactions?.[r.key];
           return (
             <button key={r.key} onClick={() => onReact(post, r.key)}
               className={cn('flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition', active ? r.activeClass : 'border-white/10 text-white/60 hover:text-white')}>
@@ -115,7 +136,9 @@ function PostCard({ post, onReact, onComment, onFollow, isFollowed, showComments
           ))}
           <div className="flex gap-2">
             <input value={draft} onChange={(e) => setDraft(post.id, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onComment(post)} placeholder="Comenta..." className="flex-1 rounded-full border border-white/10 bg-[#0c0c0c] px-3 py-1.5 text-sm outline-none focus:border-[#FBBF24]/50" />
-            <button onClick={() => onComment(post)} className="rounded-full bg-[#FBBF24] px-3 py-1.5 text-sm font-bold text-black"><Send className="h-4 w-4" /></button>
+            <button onClick={() => onComment(post)} className="rounded-full bg-[#FBBF24] px-3 py-1.5 text-sm font-bold text-black">
+              <Send className="h-4 w-4" />
+            </button>
           </div>
         </div>
       )}
@@ -126,15 +149,12 @@ function PostCard({ post, onReact, onComment, onFollow, isFollowed, showComments
 export default function ComunidadPage() {
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const avatarUrl = clerkUser?.imageUrl ?? null;
-  const clerkName = [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ') || clerkUser?.username || 'Tú';
+  const clerkName = [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ') || clerkUser?.username || 'T';
+  const meId = clerkUser?.id;
 
   const [me, setMe] = useState<{ id: string; name: string; role?: string; locationCountry?: string | null; locationProvince?: string | null } | null>(null);
-  const meId = me?.id;
+  const meIdState = me?.id;
   const meName = me?.name || clerkName;
-  const effectiveRole = me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? 'coach'
-    : me?.role === 'GYM_ADMIN' ? 'gym'
-    : me?.role === 'OWNER' ? 'admin' : 'player';
-  const isStaff = effectiveRole === 'coach' || effectiveRole === 'gym' || effectiveRole === 'admin';
 
   const [tab, setTab] = useState<Tab>('feed');
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
@@ -183,7 +203,7 @@ export default function ComunidadPage() {
       .catch(() => setPosts([]))
       .finally(() => setLoadingFeed(false));
   };
-  useEffect(() => { fetchFeed(feedFilter); /* eslint-disable-next-line */ }, [feedFilter]);
+  useEffect(() => { fetchFeed(feedFilter); }, [feedFilter]);
 
   const fetchFriends = () => api.get<Connection[]>('/api/v1/relaciones/conexiones').then(setFriends).catch(() => setFriends([]));
   const fetchRequests = () =>
@@ -191,11 +211,11 @@ export default function ComunidadPage() {
       .then((rs) => { setRequests(rs.filter((r) => r.type !== 'COACH_ATHLETE')); setStaffRequests(rs.filter((r) => r.type === 'COACH_ATHLETE')); })
       .catch(() => undefined);
   const fetchLinked = () => {
-    if (!isStaff) return;
-    const url = effectiveRole === 'gym' ? '/api/v1/relaciones/gimnasio/jugadores' : '/api/v1/relaciones/coach/atletas';
+    if (!meId) return;
+    const url = me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? '/api/v1/relaciones/gimnasio/jugadores' : '/api/v1/relaciones/coach/atletas';
     api.get<ApiUser[]>(url).then(setLinkedAthletes).catch(() => setLinkedAthletes([]));
   };
-  useEffect(() => { if (meId) { fetchFriends(); fetchRequests(); fetchLinked(); } /* eslint-disable-next-line */ }, [meId, isStaff, effectiveRole]);
+  useEffect(() => { if (meId) { fetchFriends(); fetchRequests(); fetchLinked(); } }, [meId]);
 
   const fetchRooms = (openId?: string) => {
     setLoadingRooms(true);
@@ -204,7 +224,7 @@ export default function ComunidadPage() {
       .catch(() => setRooms([]))
       .finally(() => setLoadingRooms(false));
   };
-  useEffect(() => { if (meId) fetchRooms(); /* eslint-disable-next-line */ }, [meId]);
+  useEffect(() => { if (meId) fetchRooms(); }, [meId]);
 
   const openRoom = (id: string) => {
     setActiveRoomId(id);
@@ -239,7 +259,7 @@ export default function ComunidadPage() {
       setNewText(''); setFile(null); setFilePreview(null); setVideoDuration(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchFeed(feedFilter);
-    } finally { setPublishing(false); }
+    } finally { setPublishing(false; }
   };
 
   const toggleReaction = (post: ApiPost, key: ReactionKey) => {
@@ -294,14 +314,14 @@ export default function ComunidadPage() {
   };
 
   const myPosts = posts.filter((p) => p.author.id === meId);
-  const linkedCount = isStaff ? linkedAthletes.length : friends.length;
+  const linkedCount = me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? linkedAthletes.length : friends.length;
   const activeRoom = rooms.find((r) => r.id === activeRoomId) || null;
   const unreadRooms = rooms.filter((r) => r.lastMessage && r.lastMessage.senderId !== meId).length;
 
   const TABS: { id: Tab; label: string; icon: typeof Flame; badge?: number }[] = [
     { id: 'feed', label: 'Feed', icon: Newspaper },
     { id: 'amigos', label: 'Amigos', icon: Users, badge: requests.length },
-    ...(isStaff ? [{ id: 'solicitudes' as Tab, label: 'Solicitudes', icon: ClipboardList, badge: staffRequests.length }] : []),
+    ...(me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? [{ id: 'solicitudes' as Tab, label: 'Solicitudes', icon: ClipboardList, badge: staffRequests.length }] : []),
     { id: 'perfil', label: 'Perfil', icon: User },
     { id: 'mensajes', label: 'Mensajes', icon: MessageSquare, badge: unreadRooms },
   ];
@@ -317,14 +337,17 @@ export default function ComunidadPage() {
           <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight">
             <Flame className="text-[#EF4444]" /> <span className="text-[#FBBF24]">RANKED</span> FITNESS
           </h1>
-          <p className="text-sm text-white/50">{roleLabel(me?.role)} · Comunidad</p>
+          <p className="text-sm text-white/50">{roleLabel(me?.role)} �� Comunidad</p>
         </div>
-        <button onClick={() => setTab('mensajes')} className="relative rounded-full border border-white/10 bg-[#1a1a1a] p-2.5"><MessageSquare className="h-5 w-5" />{unreadRooms > 0 && <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-[#EF4444] text-[10px] font-bold leading-4">{unreadRooms}</span>}</button>
+        <button onClick={() => setTab('mensajes')} className="relative rounded-full border border-white/10 bg-[#1a1a1a] p-2.5">
+          <MessageSquare className="h-5 w-5" />{unreadRooms > 0 && <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-[#EF4444] text-[10px] font-bold leading-4">{unreadRooms}</span>}
+        </button>
       </header>
 
       <nav className="mb-6 flex gap-2 overflow-x-auto">
         {TABS.map((t) => {
-          const Icon = t.icon; const active = tab === t.id;
+          const Icon = t.icon;
+          const active = tab === t.id;
           return (
             <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'amigos') fetchFriends(); }}
               className={cn('flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition', active ? 'bg-[#FBBF24] text-black' : 'bg-[#1a1a1a] text-white/70 hover:text-white')}>
@@ -341,7 +364,7 @@ export default function ComunidadPage() {
             <div className="flex gap-3">
               <Avatar u={{ name: meName, imageUrl: avatarUrl }} />
               <div className="flex-1">
-                <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="¿Qué lograste hoy, guerrero?" rows={2}
+                <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="��Qu� lograste hoy, guerrero?" rows={2}
                   className="w-full resize-none rounded-xl border border-white/10 bg-[#0c0c0c] p-3 text-sm outline-none focus:border-[#FBBF24]/50" />
                 {filePreview && (
                   <div className="relative mt-2">
@@ -355,7 +378,7 @@ export default function ComunidadPage() {
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f) { const url = URL.createObjectURL(f); setFilePreview(url); if (f.type.startsWith('video')) { const v = document.createElement('video'); v.preload = 'metadata'; v.onloadedmetadata = () => setVideoDuration(Math.round(v.duration)); v.src = url; } } }} />
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f) { const url = URL.createObjectURL(f); setFilePreview(url); if (f.type.startsWith('video')) { const v = document.createElement('video'); v.preload = 'metadata'; v.onloadedmetadata = () => setVideoDuration(Math.round(v.duration)); v.src = url; } } }}
                     <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:text-white"><ImagePlus className="h-4 w-4" />Foto/Video</button>
                     {me?.locationProvince && <span className="flex items-center gap-1 text-xs text-white/40"><MapPin className="h-3 w-3" />{me.locationProvince}</span>}
                   </div>
@@ -376,15 +399,15 @@ export default function ComunidadPage() {
           </div>
 
           {loadingFeed ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-[#FBBF24]" /></div>
-            : posts.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">Aún no hay publicaciones. ¡Sé el primero en compartir tu progreso!</p>
+            : posts.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">Aun no hay publicaciones. ��S� el primero en compartir tu progreso!</p>
               : posts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow}
                   isFollowed={followed.has(p.author.id)} showComments={openComments.has(p.id)}
-                  toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })}
+                  toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
                   draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))}
-                  meId={meId} meName={meName} avatarUrl={avatarUrl} />)}
-
+                  meId={meId} meName={meName} avatarUrl={avatarUrl} />
+            )}
         </div>
-      )}
+      )
 
       {tab === 'amigos' && (
         <div className="space-y-6">
@@ -402,12 +425,14 @@ export default function ComunidadPage() {
                   <Avatar u={u} />
                   <div className="flex-1"><p className="font-semibold">{u.name || u.email}</p><p className={cn('text-xs', roleColor(u.role))}>{roleLabel(u.role)}</p></div>
                   {followed.has(u.id) ? <span className="text-xs text-white/40">Solicitud enviada</span>
-                    : <button onClick={() => follow(u.id)} className="flex items-center gap-1 rounded-full bg-[#EF4444] px-3 py-1 text-xs font-semibold text-white"><UserPlus className="h-3 w-3" />Seguir</button>}
-                  <button onClick={() => startChatWith(u)} className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white"><MessageSquare className="h-4 w-4" /></button>
+                    : <button onClick={() => follow(u.id)} className="flex items-center gap-1 rounded-full bg-[#EF4444] px-3 py-1 text-xs font-semibold text-white">
+                      <UserPlus className="h-3 w-3" />Seguir</button>}
+                  <button onClick={() => startChatWith(u)} className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white">
+                    <MessageSquare className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
-          )}
+          )
 
           {requests.length > 0 && (
             <div className="space-y-2">
@@ -421,24 +446,25 @@ export default function ComunidadPage() {
                 </div>
               ))}
             </div>
-          )}
+          )
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase text-white/40">{isStaff ? 'Atletas vinculados' : 'Amigos'} ({linkedCount})</p>
-            {(isStaff ? linkedAthletes : friends.map((f) => f.user)).map((u) => (
+            <p className="text-xs font-semibold uppercase text-white/40">{me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? 'Atletas vinculados' : 'Amigos'} ({linkedCount})</p>
+            {(me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? linkedAthletes : friends.map((f) => f.user)).map((u) => (
               <div key={u.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
                 <Avatar u={u} /><div className="flex-1"><p className="font-semibold">{u.name || u.email}</p><p className={cn('text-xs', roleColor(u.role))}>{roleLabel(u.role)}</p></div>
-                <button onClick={() => startChatWith(u)} className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white"><MessageSquare className="h-4 w-4" /></button>
+                <button onClick={() => startChatWith(u)} className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white">
+                  <MessageSquare className="h-4 w-4" /></button>
               </div>
-            ))}
-            {(isStaff ? linkedAthletes.length === 0 : friends.length === 0) && <p className="text-sm text-white/40">Sin conexiones todavía.</p>}
+            )))}
+            {(me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? linkedAthletes.length === 0 : friends.length === 0) && <p className="text-sm text-white/40">Sin conexiones todav�a.</p>}
           </div>
         </div>
       )}
 
-      {tab === 'solicitudes' && isStaff && (
+      {tab === 'solicitudes' && (me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN') && (
         <div className="space-y-2">
-          {staffRequests.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">No hay solicitudes de vinculación.</p>
+          {staffRequests.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">No hay solicitudes de vinculaci�n.</p>
             : staffRequests.map((r) => (
               <div key={r.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
                 <Avatar u={r.user} /><div className="flex-1"><p className="font-semibold">{r.user.name || r.user.email}</p><p className="text-xs text-white/50">Quiere unirse a tu grupo</p></div>
@@ -455,16 +481,20 @@ export default function ComunidadPage() {
             <div className="mx-auto mb-3"><Avatar u={{ name: meName, imageUrl: avatarUrl }} size={80} /></div>
             <h2 className="text-xl font-bold">{meName}</h2>
             <p className={cn('text-sm', roleColor(me?.role))}>{roleLabel(me?.role)}</p>
-            {me?.locationProvince && <p className="mt-1 flex items-center justify-center gap-1 text-xs text-white/40"><MapPin className="h-3 w-3" />{me.locationProvince}{me.locationCountry ? `, ${me.locationProvince ? '' : ''}${me.locationCountry}` : ''}</p>}
+            {me?.locationProvince && (
+              <p className="mt-1 flex items-center justify-center gap-1 text-xs text-white/40">
+                <MapPin className="h-3 w-3" />{me.locationProvince}{me.locationCountry ?`, ${me.locationProvince ? '' : ``}${me.locationCountry}` : ``}
+              </p>
+            )}
             <div className="mt-4 flex justify-center gap-6">
               <div><p className="text-2xl font-black text-[#FBBF24]">{myPosts.length}</p><p className="text-xs text-white/50">Publicaciones</p></div>
-              <div><p className="text-2xl font-black text-[#FBBF24]">{linkedCount}</p><p className="text-xs text-white/50">{isStaff ? 'Atletas' : 'Amigos'}</p></div>
+              <div><p className="text-2xl font-black text-[#FBBF24]">{linkedCount}</p><p className="text-xs text-white/50">{me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? 'Atletas' : 'Amigos'}</p></div>
             </div>
           </div>
           <div>
             <p className="mb-2 text-xs font-semibold uppercase text-white/40">Mis publicaciones</p>
-            {myPosts.length === 0 ? <p className="text-sm text-white/40">Todavía no has publicado.</p>
-              : myPosts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow} isFollowed={false} showComments={openComments.has(p.id)} toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))} meId={meId} meName={meName} avatarUrl={avatarUrl} />)}
+            {myPosts.length === 0 ? <p className="text-sm text-white/40">Aun no has publicado.</p>
+              : myPosts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow} isFollowed={false} showComments={openComments.has(p.id)} toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })} draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))} meId={meId} meName={meName} avatarUrl={avatarUrl} />}
           </div>
         </div>
       )}
@@ -520,15 +550,6 @@ export default function ComunidadPage() {
           )}
         </div>
       )}
-
     </div>
   );
 }
-
-
-
-
-
-
-
-
