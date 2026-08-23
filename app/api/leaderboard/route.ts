@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getLeaderboard, submitScore } from "@/lib/elo";
-import { useUser } from "@clerk/nextjs";
+import { currentUser } from "@clerk/nextjs/server";
 
 const ScoreSchema = z.object({
   score: z.number().finite().min(0).max(100000),
 });
 
 export async function GET() {
-  const { user, isLoaded } = useUser();
-  if (!isLoaded || !user) {
+  const user = await currentUser();
+  if (!user) {
     return NextResponse.json(
       { ok: false, error: "No autorizado" },
       { status: 401 }
@@ -20,8 +20,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { user, isLoaded } = useUser();
-  if (!isLoaded || !user) {
+  const user = await currentUser();
+  if (!user) {
     return NextResponse.json(
       { ok: false, error: "No autorizado" },
       { status: 401 }
