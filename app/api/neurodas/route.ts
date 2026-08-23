@@ -3,11 +3,11 @@ import { prisma } from "@/lib/elo";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: Promise<{ userId?: string }> }
 ) {
-  const { userId } = await params;
+  const userId = params.userId ? await params.userId : undefined;
   const neurodas = await prisma.neuroda.findMany({
-    where: { userId },
+    where: userId ? { userId } : undefined,
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(neurodas);
@@ -15,10 +15,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: Promise<{ userId?: string }> }
 ) {
   const body = await request.json();
-  const { userId } = await params;
+  const { userId } = body ?? {};
 
   const neuroda = await prisma.neuroda.create({
     data: {
