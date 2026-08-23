@@ -127,18 +127,12 @@ export default function DashboardDispatcher() {
         <div className="flex items-center justify-center gap-2">
           <div className="h-1.5 w-32 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full w-1/3 bg-gradient-to-r from-[#EF4444] to-[#FBBF24] animate-[shimmer_1.5s_infinite]"
-              style={{ animation: 'shimmer 1.5s infinite' }}
+              className="h-full w-1/3 bg-gradient-to-r from-[#EF4444] to-[#FBBF24] skeleton"
             />
           </div>
         </div>
       </div>
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(300%); }
-        }
-      ` }} />
+    );
     </div>
   );
 }
