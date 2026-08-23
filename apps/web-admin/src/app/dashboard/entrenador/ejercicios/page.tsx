@@ -63,7 +63,6 @@ export default function EjerciciosPage() {
     if (role !== 'coach' && role !== 'admin') {
       router.replace('/dashboard');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
