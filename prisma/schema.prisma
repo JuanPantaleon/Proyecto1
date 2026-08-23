@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  name      String?
+  createdAt DateTime @default(now())
+  workouts  Workout[]
+  scores    Score[]
+  entry     LeaderboardEntry?
+  neurodas  Neuroda[]
+}
+
+model Neuroda {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  activationLevel Int      @default(50)
+  resilienceScore Int      @default(50)
+  focusScore Int      @default(50)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Workout {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  duration  Int
+  intensity Int
+  createdAt DateTime @default(now())
+}
+
+model Score {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  value     Int
+  createdAt DateTime @default(now())
+}
+
+model LeaderboardEntry {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id])
+  rating Int    @default(1000)
+}
