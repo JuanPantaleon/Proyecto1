@@ -5,7 +5,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId?: string }> }
 ) {
-  const userId = params.userId ? await params.userId : undefined;
+  const { userId } = await params;
   const neurodas = await prisma.neuroda.findMany({
     where: userId ? { userId } : undefined,
     orderBy: { createdAt: "desc" },
