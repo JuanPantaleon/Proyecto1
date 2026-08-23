@@ -1,3 +1,5 @@
+// use client
+
 export default function OnboardingPage() {
   return (
     <div className="p-6 max-w-xl mx-auto">
@@ -6,20 +8,12 @@ export default function OnboardingPage() {
         Complete tu perfil para comenzar a seguir tus entrenamientos.
       </p>
       <div className="grid grid-cols-2 gap-4">
-        <a 
-          href="/neurodas" 
+        <a
+          href="/neurodas"
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 col-span-2"
         >
           Ir al Panel
         </a>
-        <!-- 
-        <a 
-          href="/" 
-          className="bg-gray-200 text-gray-800 px-4 py-2 rounded"
-        >
-          Continuar como invitado
-        </a>
-        -->
       </div>
     </div>
   );
