@@ -27,16 +27,21 @@ export function computeRating(
 }
 
 export async function getLeaderboard(limit = 10) {
-  const entries = await prisma.leaderboardEntry.findMany({
-    orderBy: { rating: "desc" },
-    take: limit,
-    include: { user: true },
-  });
-  return entries.map((entry) => ({
-    userId: entry.userId,
-    name: entry.user.name ?? entry.user.email ?? entry.userId,
-    rating: entry.rating,
-  }));
+  try {
+    const entries = await prisma.leaderboardEntry.findMany({
+      orderBy: { rating: "desc" },
+      take: limit,
+      include: { user: true },
+    });
+    return entries.map((entry) => ({
+      userId: entry.userId,
+      name: entry.user.name ?? entry.user.email ?? entry.userId,
+      rating: entry.rating,
+    }));
+  } catch (error) {
+    console.error("getLeaderboard error:", error);
+    return [];
+  }
 }
 
 export async function submitScore(userId: string, score: number) {
