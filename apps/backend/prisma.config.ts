@@ -4,11 +4,10 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-// En producción (Render/Supabase) DATABASE_URL llega como variable de entorno
-// real del panel y este loader es un no-op. En local se carga apps/backend/.env
-// manualmente (Prisma 7 no auto-carga .env).
+// Cargar .env siempre para asegurar que DATABASE_URL esté disponible
+// En producción (Render), el DATABASE_URL del panel debe sobreescribirse
+// con el valor del .env local para evitar que Prisma use SQLite por defecto.
 function loadLocalEnv(): void {
-  if (process.env["DATABASE_URL"]) return;
   const candidates = [
     resolve(process.cwd(), ".env"),
     resolve(process.cwd(), "apps/backend/.env"),
@@ -18,7 +17,7 @@ function loadLocalEnv(): void {
     for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
       const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"?([^"\r\n]*)"?\s*$/);
       if (!m) continue;
-      if (process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+      process.env[m[1]] = m[2];
     }
     break;
   }
