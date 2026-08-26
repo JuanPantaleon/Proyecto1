@@ -330,6 +330,21 @@ export default function ComunidadPage() {
     u.imageUrl ? <img src={u.imageUrl} alt="" width={size} height={size} className="rounded-full object-cover" style={{ width: size, height: size }} />
       : <div className="flex items-center justify-center rounded-full bg-[#1a1a1a] text-[#FBBF24] font-bold" style={{ width: size, height: size, fontSize: size * 0.4 }}>{initials(u.name)}</div>;
 
+  const handleFileChange = (e: any) => {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setFilePreview(url);
+      if (f.type.startsWith('video')) {
+        const v = document.createElement('video');
+        v.preload = 'metadata';
+        v.onloadedmetadata = () => setVideoDuration(Math.round(v.duration));
+        v.src = url;
+      }
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 text-white">
       <header className="mb-6 flex items-center justify-between">
@@ -377,8 +392,7 @@ export default function ComunidadPage() {
                 )}
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f) { const url = URL.createObjectURL(f); setFilePreview(url); if (f.type.startsWith('video')) { const v = document.createElement('video'); v.preload = 'metadata'; v.onloadedmetadata = () => setVideoDuration(Math.round(v.duration)); v.src = url; } } } />
+                    <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileChange} />
                     <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:text-white"><ImagePlus className="h-4 w-4" />Foto/Video</button>
                     {me?.locationProvince && <span className="flex items-center gap-1 text-xs text-white/40"><MapPin className="h-3 w-3" />{me.locationProvince}</span>}
                   </div>
