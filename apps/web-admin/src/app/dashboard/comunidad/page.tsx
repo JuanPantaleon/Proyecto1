@@ -423,7 +423,7 @@ export default function ComunidadPage() {
         </div>
       )
 
-      {tab === 'amigos' && (
+      {tab === 'amigos' ? (
         <div className="space-y-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
@@ -474,9 +474,9 @@ export default function ComunidadPage() {
             {(me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? linkedAthletes.length === 0 : friends.length === 0) && <p className="text-sm text-white/40">Sin conexiones todav�a.</p>}
           </div>
         </div>
-      )}
+      ) : null}
 
-      {tab === 'solicitudes' && (me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN') && (
+      {tab === 'solicitudes' ? (me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? (
         <div className="space-y-2">
           {staffRequests.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">No hay solicitudes de vinculaci�n.</p>
             : staffRequests.map((r) => (
@@ -487,9 +487,9 @@ export default function ComunidadPage() {
               </div>
             ))}
         </div>
-      )}
+      ) : null) : null}
 
-      {tab === 'perfil' && (
+      {tab === 'perfil' ? (
         <div className="space-y-6">
           <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a1a1a] to-[#0c0c0c] p-6 text-center">
             <div className="mx-auto mb-3"><Avatar u={{ name: meName, imageUrl: avatarUrl }} size={80} /></div>
@@ -511,9 +511,9 @@ export default function ComunidadPage() {
               : myPosts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow} isFollowed={false} showComments={openComments.has(p.id)} toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })} draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))} meId={meId} meName={meName} avatarUrl={avatarUrl} />}
           </div>
         </div>
-      )}
+      ) : null}
 
-      {tab === 'mensajes' && (
+      {tab === 'mensajes' ? (
         <div className="rounded-2xl border border-white/10 bg-[#111]">
           {!activeRoom && (
             <div className="p-3">
