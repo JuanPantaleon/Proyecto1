@@ -378,8 +378,8 @@ export default function ComunidadPage() {
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f) { const url = URL.createObjectURL(f); setFilePreview(url); if (f.type.startsWith('video')) { const v = document.createElement('video'); v.preload = 'metadata'; v.onloadedmetadata = () => setVideoDuration(Math.round(v.duration)); v.src = url; } } }}
-                    <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:text-white"><ImagePlus className="h-4 w-4" />Foto/Video</button>
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f) { const url = URL.createObjectURL(f); setFilePreview(url); if (f.type.startsWith('video')) { const v = document.createElement('video'); v.preload = 'metadata'; v.onloadedmetadata = () => setVideoDuration(Math.round(v.duration)); v.src = url; } } } />
+                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:text-white"><ImagePlus className="h-4 w-4" />Foto/Video</button>
                     {me?.locationProvince && <span className="flex items-center gap-1 text-xs text-white/40"><MapPin className="h-3 w-3" />{me.locationProvince}</span>}
                   </div>
                   <button onClick={publish} disabled={publishing || (!newText.trim() && !file)}
