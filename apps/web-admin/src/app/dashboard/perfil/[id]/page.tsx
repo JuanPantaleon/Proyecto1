@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import {
   ArrowLeft,
   Trophy,
@@ -18,15 +19,14 @@ import {
   MapPin,
   Building2,
   UserX,
-  Image,
-  Loader2,
   MessageSquare,
   Send,
   Crown,
   Skull,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getAthleteById, initials, type Athlete } from '@/lib/athletes';
+import { getAthleteById, type Athlete } from '@/lib/athletes';
 import {
   followStatusFor,
   friendStatusFor,
@@ -37,7 +37,7 @@ import {
 import type { FriendRequestStatus } from '@ranked-fitness/shared';
 
 /* ----------------------------- Tipos ----------------------------- */
-interface Post { id: string; type: string; text: string; mediaUrl?: string | null; mediaKind?: string | null; createdAt: string; author: { id: string; name: string; imageUrl?: string | null }; reactions: { FIRE?: number; SKULL?: number; CROWN?: number }; myReactions: { FIRE?: boolean; SKULL?: boolean; CROWN?: boolean }; comments: { id: string; text: string; createdAt: string; author: { id: string; name: string } }[]; }
+interface Post { id: string; type: string; text: string; mediaUrl?: string | null; mediaKind?: string | null; createdAt: string; author: { id: string; name: string; imageUrl?: string | null; role?: string }; reactions: { FIRE?: number; SKULL?: number; CROWN?: number }; myReactions: { FIRE?: boolean; SKULL?: boolean; CROWN?: boolean }; comments: { id: string; text: string; createdAt: string; author: { id: string; name: string } }[]; }
 type ReactionKey = 'FIRE' | 'SKULL' | 'CROWN';
 const REACTIONS: { key: ReactionKey; label: string; icon: typeof Flame; activeClass: string }[] = [
   { key: 'FIRE', label: 'Respeto', icon: Flame, activeClass: 'border-[#EF4444]/60 bg-[#EF4444]/15 text-[#EF4444]' },
@@ -170,19 +170,17 @@ export default function PerfilAtletaPage() {
   const params = useParams<{ id: string }>();
   const athleteId = Number(params.id);
 
-  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const { user: clerkUser } = useUser();
   const avatarUrl = clerkUser?.imageUrl ?? null;
   const clerkName = [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ') || clerkUser?.username || 'T';
   const meId = clerkUser?.id;
-
-  const [me, setMe] = useState<{ id: string; name: string; role?: string; locationCountry?: string | null; locationProvince?: string | null } | null>(null);
-  const meIdState = me?.id;
-  const meName = me?.name || clerkName;
+  const meName = clerkName;
 
   const [loading, setLoading] = useState(true);
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [following, setFollowing] = useState(false);
   const [friendStatus, setFriendStatus] = useState<FriendRequestStatus | null>(null);
+  const followed = new Set<string>();
 
   useEffect(() => {
     setLoading(true);

@@ -81,8 +81,11 @@ const Avatar = ({ u, size = 40 }: { u: { name?: string; imageUrl?: string | null
     </div>
   );
 function FeedTab({
-  tab, setTab, feedFilter, posts, loadingFeed, myReactions, followed, openComments,
-  draft, setDraft, meId, meName, avatarUrl, publish, fetchFeed
+  tab, setTab, feedFilter, setFeedFilter, posts, loadingFeed, myReactions, followed, openComments, setOpenComments,
+  draft, setDraft, meId, meName, avatarUrl, publish, fetchFeed,
+  newText, setNewText, filePreview, setFilePreview, videoDuration, setVideoDuration,
+  file, setFile, fileInputRef, handleFileChange, toggleReaction, submitComment, follow, me,
+  publishing
 }: any) {
   return (
     <div className="space-y-6">
@@ -125,10 +128,10 @@ function FeedTab({
 
       {loadingFeed ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-[#FBBF24]" /></div>
         : posts.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">Aun no hay publicaciones. ¡Sé el primero en compartir tu progreso!</p>
-          : posts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow}
+          : posts.map((p : any) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow}
               isFollowed={followed.has(p.author.id)} showComments={openComments.has(p.id)}
-              toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-              draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))}
+              toggleComments={(id) => setOpenComments((prev: any) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
+              draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev: any) => ({ ...prev, [id]: v }))}
               meId={meId} meName={meName} avatarUrl={avatarUrl} />
       )}
     </div>
@@ -137,8 +140,8 @@ function FeedTab({
 
 function AmigosTab({
   tab, setTab, searchQuery, doSearch, searching, searchResults, followed, startChatWith,
-  requests, respondRequest, fetchFriends
-}) {
+  requests, respondRequest, fetchFriends, follow, linkedCount, linkedAthletes, friends, me
+}: any) {
   return (
     <div className="space-y-6">
       <div className="relative">
@@ -151,7 +154,7 @@ function AmigosTab({
       {searchResults.length > 0 ? (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase text-white/40">Resultados</p>
-          {searchResults.map((u) => (
+          {searchResults.map((u: any) => (
             <div key={u.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
               <Avatar u={u} />
               <div className="flex-1"><p className="font-semibold">{u.name || u.email}</p><p className={cn('text-xs', roleColor(u.role))}>{roleLabel(u.role)}</p></div>
@@ -167,7 +170,7 @@ function AmigosTab({
 
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase text-white/40">{me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? 'Atletas vinculados' : 'Amigos'} ({linkedCount})</p>
-        {(me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? linkedAthletes : friends.map((f) => f.user)).map((u) => (
+        {(me?.role === 'TRAINER' || me?.role === 'SUPER_ADMIN' ? linkedAthletes : friends.map((f: any) => f.user)).map((u: any) => (
           <div key={u.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
             <Avatar u={u} /><div className="flex-1"><p className="font-semibold">{u.name || u.email}</p><p className={cn('text-xs', roleColor(u.role))}>{roleLabel(u.role)}</p></div>
             <button onClick={() => startChatWith(u)} className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white">
@@ -182,11 +185,11 @@ function AmigosTab({
 
 function SolicitudesTab({
   meRole, staffRequests, respondRequest
-}) {
+}: any) {
   return meRole === 'TRAINER' || meRole === 'SUPER_ADMIN' ? (
     <div className="space-y-2">
       {staffRequests.length === 0 ? <p className="rounded-2xl border border-white/10 bg-[#111] p-8 text-center text-white/50">No hay solicitudes de vinculación.</p>
-        : staffRequests.map((r) => (
+        : staffRequests.map((r: FollowRequest) => (
           <div key={r.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111] p-3">
             <Avatar u={r.user} /><div className="flex-1"><p className="font-semibold">{r.user.name || r.user.email}</p><p className="text-xs text-white/50">Quiere unirse a tu grupo</p></div>
             <button onClick={() => respondRequest(r.id, 'ACCEPTED')} className="rounded-full bg-[#FBBF24] px-3 py-1 text-xs font-semibold text-black">Aceptar</button>
@@ -201,7 +204,7 @@ function PerfilTab({
   tab, meName, me, myPosts, linkedCount, linkedAthletes, friends,
   avatarUrl, openComments, setOpenComments, draft, setDraft, meId,
   toggleReaction, submitComment, follow
-}) {
+}: any) {
    return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a1a1a] to-[#0c0c0c] p-6 text-center">
@@ -221,7 +224,7 @@ function PerfilTab({
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-white/40">Mis publicaciones</p>
         {myPosts.length === 0 ? <p className="text-sm text-white/40">Aun no has publicado.</p>
-          : myPosts.map((p) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow} isFollowed={false} showComments={openComments.has(p.id)} toggleComments={(id) => setOpenComments((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })} draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev) => ({ ...prev, [id]: v }))} meId={meId} meName={meName} avatarUrl={avatarUrl} />)}
+          : myPosts.map((p: ApiPost) => <PostCard key={p.id} post={p} onReact={toggleReaction} onComment={submitComment} onFollow={follow} isFollowed={false} showComments={openComments.has(p.id)} toggleComments={(id) => setOpenComments((prev: Set<string>) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })} draft={draft[p.id] ?? ''} setDraft={(id, v) => setDraft((prev: Record<string, string>) => ({ ...prev, [id]: v }))} meId={meId} meName={meName} avatarUrl={avatarUrl} />)}
       </div>
     </div>
   );
@@ -229,10 +232,9 @@ function PerfilTab({
 
 function MensajesTab({
   tab, activeRoomId, openRooms, setActiveRoomId, openMessages, activeRoom, rooms, loadingRooms,
-  chatDraft, sendMessage, openRoom, fetchRooms, meId, meName, avatarUrl
-}) {
-  const activeRoomData = rooms.find((r) => r.id === activeRoomId) || null;
-  const unreadRooms = rooms.filter((r) => r.lastMessage && r.lastMessage.senderId !== meId).length;
+  chatDraft, setChatDraft, sendMessage, openRoom, fetchRooms, meId, meName, avatarUrl
+}: any) {
+  const activeRoomData = rooms.find((r: ChatRoom) => r.id === activeRoomId) || null;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[#111]">
@@ -241,7 +243,7 @@ function MensajesTab({
           <p className="mb-2 px-1 text-xs font-semibold uppercase text-white/40">Conversaciones</p>
           {loadingRooms ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-[#FBBF24]" /></div>
             : rooms.length === 0 ? <p className="px-1 text-sm text-white/40">Sin chats. Busca un amigo y pulsa el icono de mensaje.</p>
-              : rooms.map((r) => {
+              : rooms.map((r: ChatRoom) => {
                 const other = r.members.find((m) => m.id !== meId);
                 return (
                   <button key={r.id} onClick={() => openRoom(r.id)} className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-white/5">
@@ -258,11 +260,11 @@ function MensajesTab({
         <div className="flex h-[70vh] flex-col">
           <div className="flex items-center gap-3 border-b border-white/10 p-3">
             <button onClick={() => setActiveRoomId(null)} className="rounded-full border border-white/10 p-1.5"><ArrowLeft className="h-4 w-4" /></button>
-            <Avatar u={activeRoomData.members.find((m) => m.id !== meId) ?? activeRoomData} />
-            <p className="font-semibold">{activeRoomData.members.find((m) => m.id !== meId)?.name || activeRoomData.name || 'Grupo'}</p>
+            <Avatar u={activeRoomData.members.find((m: ApiUser) => m.id !== meId) ?? activeRoomData} />
+            <p className="font-semibold">{activeRoomData.members.find((m: ApiUser) => m.id !== meId)?.name || activeRoomData.name || 'Grupo'}</p>
           </div>
           <div className="flex-1 space-y-2 overflow-y-auto p-3">
-            {activeMessages.map((m) => {
+            {openMessages.map((m: ChatMessage) => {
               const mine = m.senderId === meId;
               return (
                 <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
@@ -390,7 +392,6 @@ export default function ComunidadPage() {
   const meId = clerkUser?.id;
 
   const [me, setMe] = useState<{ id: string; name: string; role?: string; locationCountry?: string | null; locationProvince?: string | null } | null>(null);
-  const meIdState = me?.id;
   const meName = me?.name || clerkName;
 
   const [tab, setTab] = useState<Tab>('feed');
@@ -687,8 +688,6 @@ export default function ComunidadPage() {
           draft={draft}
           setDraft={setDraft}
           meId={meId}
-          meName={meName}
-          avatarUrl={avatarUrl}
           toggleReaction={toggleReaction}
           submitComment={submitComment}
           follow={follow}
