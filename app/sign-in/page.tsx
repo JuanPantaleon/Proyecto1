@@ -9,7 +9,12 @@ export default function SignInPage() {
         </h2>
         <div className="space-y-4">
           <div className="w-full bg-background border border-border rounded-lg p-4 hover:border-primary transition-colors">
-            <SignIn />
+            <SignIn
+              routing="path"
+              signUpUrl="/sign-up"
+              signInUrl="/sign-in"
+              afterSignInUrl="/onboarding"
+            />
           </div>
         </div>
         <p className="text-sm text-muted-foreground text-center">
