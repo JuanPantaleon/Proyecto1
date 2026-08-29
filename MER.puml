@@ -1,0 +1,100 @@
+@startuml
+
+entity USER {
+    * id : uuid <<PK>>
+    * clerkId : string <<UK>>
+    * email : string <<UK>>
+    firstName : string
+    lastName : string
+    imageUrl : string
+    currentWeightKg : decimal
+    heightCm : int
+    streakDays : int
+    role : enum
+    gymId : uuid <<FK>>
+    createdAt : datetime
+    updatedAt : datetime
+}
+
+entity EXERCISE {
+    * id : uuid <<PK>>
+    * name : string <<UK>>
+    muscleGroup : enum
+    level : enum
+    massValue : int
+    demandValue : int
+    complexityValue : int
+    impactValue : int
+    exerciseFactor : decimal
+    isActive : boolean
+    createdAt : datetime
+    updatedAt : datetime
+}
+
+entity SESSION {
+    * id : uuid <<PK>>
+    * userId : uuid <<FK>>
+    startedAt : datetime
+    endedAt : datetime
+    estimatedCalories : int
+    timerState : enum
+    timerStartedAt : datetime
+    timerPausedAt : datetime
+    accumulatedTime : int
+    createdAt : datetime
+}
+
+entity SET {
+    * id : uuid <<PK>>
+    * sessionId : uuid <<FK>>
+    * exerciseId : uuid <<FK>>
+    * userId : uuid <<FK>>
+    weightKg : decimal
+    reps : int
+    variantBonus : decimal
+    penalty : decimal
+    isRecordPr : boolean
+    isgScore : decimal
+    createdAt : datetime
+}
+
+entity REST_TIMER {
+    * id : uuid <<PK>>
+    * sessionId : uuid <<FK>>
+    setId : uuid <<FK>>
+    startedAt : datetime
+    endedAt : datetime
+    durationSec : int
+    createdAt : datetime
+}
+
+entity AUDIT_LOG {
+    * id : uuid <<PK>>
+    * userId : uuid <<FK>>
+    action : string
+    entity : string
+    entityId : string
+    oldData : json
+    newData : json
+    ipAddress : string
+    userAgent : string
+    createdAt : datetime
+}
+
+entity GYM {
+    * id : uuid <<PK>>
+    name : string
+    address : string
+    createdAt : datetime
+    updatedAt : datetime
+}
+
+USER ||--o{ SESSION
+USER ||--o{ SET
+USER ||--o{ AUDIT_LOG
+SESSION ||--o{ SET
+SESSION ||--o{ REST_TIMER
+EXERCISE ||--o{ SET
+GYM ||--o{ USER
+
+@enduml

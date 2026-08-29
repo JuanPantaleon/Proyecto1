@@ -1,0 +1,292 @@
+@import "tailwindcss";
+
+@theme {
+  /* ===== CORE PALETTE - Ranked Fitness Design System ===== */
+  /* Negro puro para fondos y superficies */
+  --color-background: 0 0% 0%;           /* #000000 - Pure black */
+  --color-background-elevated: 0 0% 5%;  /* #0D0D0D - Soft black */
+  --color-background-hover: 0 0% 7%;
+  --color-background-active: 0 0% 10%;
+
+  /* Blanco puro para texto principal */
+  --color-foreground: 0 0% 100%;
+  --color-foreground-muted: 0 0% 60%;
+  --color-foreground-subtle: 0 0% 40%;
+
+  /* Superficies (cards, modals, dropdowns) */
+  --color-card: 0 0% 5%;                 /* #0D0D0D */
+  --color-card-hover: 0 0% 8%;
+  --color-card-border: 0 0% 15%;
+  --color-card-foreground: 0 0% 100%;
+
+  /* Popovers, tooltips, dropdowns */
+  --color-popover: 0 0% 5%;
+  --color-popover-border: 0 0% 15%;
+  --color-popover-foreground: 0 0% 100%;
+
+  /* ROJO - Primary / CTAs / Acciones principales (#EF4444) */
+  --color-primary: 0 84% 60%;
+  --color-primary-hover: 0 84% 65%;
+  --color-primary-active: 0 84% 55%;
+  --color-primary-subtle: 0 84% 60% / 0.12;
+  --color-primary-foreground: 0 0% 100%;
+  --color-primary-glow: 0 84% 60% / 0.35;
+
+  /* DORADO/ÁMBAR - Accent / Badges / Ranking / Highlights (#FBBF24) */
+  --color-accent: 43 96% 56%;
+  --color-accent-hover: 43 96% 62%;
+  --color-accent-active: 43 96% 50%;
+  --color-accent-subtle: 43 96% 56% / 0.12;
+  --color-accent-foreground: 0 0% 0%;
+  --color-accent-glow: 43 96% 56% / 0.35;
+  --color-accent-dim: 43 60% 45%;
+
+  /* Estados */
+  --color-success: 142 76% 36%;
+  --color-success-subtle: 142 76% 36% / 0.12;
+  --color-success-foreground: 0 0% 100%;
+
+  --color-warning: 48 96% 53%;
+  --color-warning-subtle: 48 96% 53% / 0.12;
+  --color-warning-foreground: 0 0% 0%;
+
+  --color-destructive: 0 84% 60%;
+  --color-destructive-hover: 0 84% 65%;
+  --color-destructive-subtle: 0 84% 60% / 0.12;
+  --color-destructive-foreground: 0 0% 100%;
+
+  /* Bordes e inputs */
+  --color-border: 0 0% 15%;
+  --color-border-hover: 0 0% 22%;
+  --color-border-focus: 0 84% 60%;
+  --color-input: 0 0% 8%;
+  --color-input-hover: 0 0% 12%;
+  --color-input-focus: 0 0% 15%;
+
+  /* Anillos de foco */
+  --color-ring: 0 84% 60%;
+  --color-ring-accent: 43 96% 56%;
+  --color-ring-offset: 0 0% 0%;
+
+  /* Muted / Disabled */
+  --color-muted: 0 0% 10%;
+  --color-muted-foreground: 0 0% 50%;
+  --color-disabled: 0 0% 15%;
+  --color-disabled-foreground: 0 0% 35%;
+
+  /* Radio */
+  --radius: 0.5rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Sombras modernas con glow */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+
+  /* Sombras con glow de marca */
+  --shadow-primary-glow: 0 0 20px rgb(239 68 68 / 0.35), 0 10px 15px -3px rgb(0 0 0 / 0.5);
+  --shadow-accent-glow: 0 0 20px rgb(251 191 36 / 0.35), 0 10px 15px -3px rgb(0 0 0 / 0.4);
+
+  /* Transiciones */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Z-index scale */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+}
+
+/* ===== FORCE DARK MODE - Class Strategy ===== */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: hsl(var(--color-background));
+  color: hsl(var(--color-foreground));
+}
+
+/* ===== BASE LAYER ===== */
+@layer base {
+  * {
+    border-color: hsl(var(--color-border));
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: hsl(var(--color-background));
+    color: hsl(var(--color-foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background-color: hsl(var(--color-primary) / 0.3);
+    color: hsl(var(--color-foreground));
+  }
+
+  ::-moz-selection {
+    background-color: hsl(var(--color-primary) / 0.3);
+    color: hsl(var(--color-foreground));
+  }
+
+  :focus-visible {
+    outline: none;
+    ring: 2px solid hsl(var(--color-ring));
+    ring-offset: 2px;
+    ring-offset-color: hsl(var(--color-background));
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background-color: hsl(var(--color-background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--color-border));
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--color-muted-foreground) / 0.3);
+  }
+  ::-webkit-scrollbar-corner {
+    background-color: hsl(var(--color-background));
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    opacity: 0;
+  }
+}
+
+/* ===== COMPONENTS LAYER ===== */
+@layer components {
+  .glass {
+    background-color: hsl(var(--color-background-elevated) / 0.8);
+    backdrop-filter: blur(24px);
+    border: 1px solid hsl(var(--color-card-border));
+  }
+
+  .glass-strong {
+    background-color: hsl(var(--color-background-elevated) / 0.95);
+    backdrop-filter: blur(40px);
+    border: 1px solid hsl(var(--color-card-border));
+  }
+
+  .gradient-primary {
+    background: linear-gradient(to right, hsl(var(--color-primary)), hsl(var(--color-primary-hover)), hsl(var(--color-primary)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .gradient-accent {
+    background: linear-gradient(to right, hsl(var(--color-accent)), hsl(var(--color-accent-hover)), hsl(var(--color-accent)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: hsl(var(--color-muted));
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    animation: shimmer 2s infinite;
+    background: linear-gradient(to right, transparent, hsl(var(--color-foreground) / 0.1), transparent);
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+  }
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  25% { transform: translateY(-20px) translateX(10px); }
+  50% { transform: translateY(-10px) translateX(-15px); }
+  75% { transform: translateY(-30px) translateX(5px); }
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes fade-slide {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-slide {
+  animation: fade-slide 0.25s ease-out;
+}
+
+.animate-float {
+  animation: float 20s ease-in-out infinite;
+}
+
+.animate-float-subtle {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-subtle {
+  animation: pulse 3s ease-in-out infinite;
+}
+
+.animate-bounce-subtle {
+  animation: bounce 2s ease-in-out infinite;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* ===== UTILITIES LAYER ===== */
+@layer utilities {
+  .clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-left { padding-left: env(safe-area-inset-left); }
+  .safe-right { padding-right: env(safe-area-inset-right); }
+}

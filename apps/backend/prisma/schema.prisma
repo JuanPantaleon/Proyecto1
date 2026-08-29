@@ -1,0 +1,451 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MuscleGroup {
+  PECHO
+  ESPALDA
+  PIERNAS
+  HOMBROS
+  BRAZOS
+  CORE
+  CARDIO
+  OTROS
+}
+
+enum ExerciseLevel {
+  PRINCIPIANTE
+  INTERMEDIO
+  AVANZADO
+}
+
+enum MetricType {
+  REPS_WEIGHT
+  TIME_ONLY
+  REPS_ONLY
+  TO_FAILURE
+}
+
+enum SetType {
+  NORMAL
+  FAILURE
+  WARMUP
+}
+
+enum Role {
+  USER
+  TRAINER
+  GYM_ADMIN
+  SUPER_ADMIN
+  OWNER
+}
+
+enum ConnectionType {
+  FRIEND
+  FOLLOW
+  COACH_ATHLETE
+}
+
+enum RoutineDayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum RoutineBlockType {
+  CIRCUIT
+  TRAINING
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+enum PostType {
+  WORKOUT_COMPLETED
+  PR
+  MEDIA
+}
+
+enum ReactionType {
+  FIRE
+  SKULL
+  CROWN
+}
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+  VOICE
+}
+
+model Gym {
+  id        String   @id @default(uuid())
+  name      String
+  verified  Boolean  @default(false)
+  country   String?
+  province  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users     User[]
+
+  @@map("gyms")
+}
+
+enum SetValidationStatus {
+  APPROVED
+  REQUIRES_VIDEO
+  REJECTED
+}
+
+model User {
+  id                String    @id @default(uuid())
+  clerkId           String    @unique @map("clerk_id")
+  email             String    @unique
+  firstName         String?   @map("first_name")
+  lastName          String?   @map("last_name")
+  imageUrl          String?   @map("image_url")
+  currentWeightKg   Decimal   @db.Decimal(5,2) @default(0) @map("current_weight_kg")
+  heightCm          Int       @default(0) @map("height_cm")
+  streakDays        Int       @default(0) @map("streak_days")
+  role              Role      @default(USER)
+  isOnboarded       Boolean   @default(false) @map("is_onboarded")
+  gymId             String?   @map("gym_id")
+  gym               Gym?      @relation(fields: [gymId], references: [id], onDelete: SetNull)
+  locationCountry   String?   @map("location_country")
+  locationProvince  String?   @map("location_province")
+  locationCity      String?   @map("location_city")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  sessions          Session[]
+  sets              Set[]
+  auditLogs         AuditLog[]
+  createdExercises  Exercise[] @relation("ExerciseCreatedBy")
+  createdRoutines   Routine[] @relation("RoutineCreatedBy")
+
+  connectionsSent    Connection[] @relation("ConnectionRequester")
+  connectionsReceived Connection[] @relation("ConnectionAddressee")
+  posts              Post[] @relation("PostAuthor")
+  postReactions      PostReaction[]
+  postComments       PostComment[]
+  chatRoomsCreated   ChatRoom[] @relation("ChatCreatedBy")
+  chatMemberships    ChatRoomMember[]
+  messagesSent       Message[] @relation("MessageSender")
+  media              Media[]   @relation("MediaOwner")
+
+  @@map("users")
+}
+
+model Exercise {
+  id              String        @id @default(uuid())
+  name            String        @unique
+  description     String?       @map("description")
+  muscleGroup     MuscleGroup   @map("muscle_group")
+  level           ExerciseLevel @default(PRINCIPIANTE)
+  metricType      MetricType    @default(REPS_WEIGHT) @map("metric_type")
+  massValue       Int?          @map("mass_value")
+  demandValue     Int?          @map("demand_value")
+  complexityValue Int?          @map("complexity_value")
+  impactValue     Int?          @map("impact_value")
+  exerciseFactor  Decimal       @db.Decimal(4,2) @map("exercise_factor")
+  isCustom        Boolean       @default(false) @map("is_custom")
+  defaultSets     Int?          @map("default_sets")
+  defaultReps     Int?          @map("default_reps")
+  defaultWeight   Decimal?      @db.Decimal(8,2) @map("default_weight")
+  defaultSec      Int?          @map("default_sec")
+  createdById     String?       @map("created_by_id")
+  createdBy       User?         @relation("ExerciseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  sets            Set[]
+  routineSets     RoutineSet[]
+
+  @@map("exercises")
+}
+
+model Session {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt         DateTime @map("started_at")
+  endedAt           DateTime? @map("ended_at")
+  estimatedCalories Int      @default(0) @map("estimated_calories")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  timerState        TimerState @default(STOPPED) @map("timer_state")
+  timerStartedAt    DateTime? @map("timer_started_at")
+  timerPausedAt     DateTime? @map("timer_paused_at")
+  accumulatedTime   Int       @default(0) @map("accumulated_time")
+
+  sets              Set[]
+  restTimers        RestTimer[]
+
+  @@map("sessions")
+}
+
+model RestTimer {
+  id           String   @id @default(uuid())
+  sessionId    String   @map("session_id")
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  setId        String?  @map("set_id")
+  startedAt    DateTime @map("started_at")
+  endedAt      DateTime? @map("ended_at")
+  durationSec  Int      @default(0) @map("duration_sec")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("rest_timers")
+}
+
+enum TimerState {
+  RUNNING
+  PAUSED
+  STOPPED
+}
+
+model Set {
+  id                String   @id @default(uuid())
+  sessionId         String   @map("session_id")
+  session           Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId        String   @map("exercise_id")
+  exercise          Exercise @relation(fields: [exerciseId], references: [id])
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id])
+  weightKg          Decimal? @db.Decimal(6,2) @map("weight_kg")
+  reps              Int?
+  durationSec       Int?     @map("duration_sec")
+  setType           SetType  @default(NORMAL) @map("set_type")
+  variantBonus      Decimal  @db.Decimal(3,2) @default(1.00) @map("variant_bonus")
+  penalty           Decimal  @db.Decimal(3,2) @default(1.00)
+  isRecordPr        Boolean  @default(false) @map("is_record_pr")
+  isgScore          Decimal  @db.Decimal(8,2) @map("isg_score")
+  validationStatus  SetValidationStatus @default(APPROVED) @map("validation_status")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("sets")
+}
+
+model Routine {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  description String?
+  goal        String?
+  level       ExerciseLevel @default(INTERMEDIO)
+  isPublic    Boolean       @default(true) @map("is_public")
+  isOfficial  Boolean       @default(false) @map("is_official")
+  createdById String?       @map("created_by_id")
+  createdBy   User?         @relation("RoutineCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  days RoutineDay[]
+
+  @@map("routines")
+}
+
+model RoutineDay {
+  id        String           @id @default(uuid())
+  routineId String           @map("routine_id")
+  routine   Routine          @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  dayOfWeek RoutineDayOfWeek @map("day_of_week")
+  title     String?
+  focus     String?
+  goal      String?
+  order     Int              @default(0)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  blocks RoutineBlock[]
+
+  @@unique([routineId, dayOfWeek])
+  @@map("routine_days")
+}
+
+model RoutineBlock {
+  id        String            @id @default(uuid())
+  dayId     String            @map("day_id")
+  day       RoutineDay        @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  type      RoutineBlockType
+  name      String
+  rounds    Int?
+  order     Int               @default(0)
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  sets RoutineSet[]
+
+  @@map("routine_blocks")
+}
+
+model RoutineSet {
+  id         String        @id @default(uuid())
+  blockId    String        @map("block_id")
+  block      RoutineBlock  @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  exerciseId String        @map("exercise_id")
+  exercise   Exercise      @relation(fields: [exerciseId], references: [id])
+  targetSets Int?          @map("target_sets")
+  targetReps String?       @map("target_reps")
+  weightKg   Decimal?      @db.Decimal(6,2) @map("weight_kg")
+  tempo      String?
+  notes      String?
+  order      Int           @default(0)
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  @@map("routine_sets")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String   @map("entity_id")
+  oldData   Json?    @map("old_data")
+  newData   Json?    @map("new_data")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+}
+
+model Connection {
+  id          String           @id @default(uuid())
+  requesterId String           @map("requester_id")
+  requester   User             @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String           @map("addressee_id")
+  addressee   User             @relation("ConnectionAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  type        ConnectionType
+  status      ConnectionStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@unique([requesterId, addresseeId, type])
+  @@index([addresseeId, status])
+  @@map("connections")
+}
+
+model Post {
+  id                String      @id @default(uuid())
+  authorId          String      @map("author_id")
+  author            User        @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  type              PostType    @default(MEDIA)
+  text              String      @default("")
+  mediaUrl          String?     @map("media_url")
+  mediaKind         MediaKind?  @map("media_kind")
+  mediaDurationSec  Int?        @map("media_duration_sec")
+  liftName          String?     @map("lift_name")
+  weightKg          Decimal?    @db.Decimal(8,2) @map("weight_kg")
+  reps              Int?
+  durationSec       Int?        @map("duration_sec")
+  isgScore          Decimal?    @db.Decimal(10,2) @map("isg_score")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  reactions         PostReaction[]
+  comments          PostComment[]
+
+  @@index([authorId, createdAt])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+model PostReaction {
+  id        String       @id @default(uuid())
+  postId    String       @map("post_id")
+  post      Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String       @map("user_id")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      ReactionType
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@unique([postId, userId])
+  @@map("post_reactions")
+}
+
+model PostComment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([postId, createdAt])
+  @@map("post_comments")
+}
+
+model ChatRoom {
+  id          String   @id @default(uuid())
+  name        String?
+  isGroup     Boolean  @default(false) @map("is_group")
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("ChatCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members     ChatRoomMember[]
+  messages    Message[]
+
+  @@map("chat_rooms")
+}
+
+model ChatRoomMember {
+  id         String    @id @default(uuid())
+  roomId     String    @map("room_id")
+  room       ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isAdmin    Boolean   @default(false) @map("is_admin")
+  lastReadAt DateTime? @map("last_read_at")
+  joinedAt   DateTime  @default(now()) @map("joined_at")
+
+  @@unique([roomId, userId])
+  @@map("chat_room_members")
+}
+
+model Message {
+  id               String     @id @default(uuid())
+  roomId           String     @map("room_id")
+  room             ChatRoom   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderId         String     @map("sender_id")
+  sender           User       @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  text             String     @default("")
+  mediaUrl         String?    @map("media_url")
+  mediaKind        MediaKind? @map("media_kind")
+  voiceDurationSec Int?       @map("voice_duration_sec")
+  createdAt        DateTime   @default(now()) @map("created_at")
+
+  @@index([roomId, createdAt])
+  @@map("messages")
+}
+
+model Media {
+  id        String    @id @default(uuid())
+  ownerId   String    @map("owner_id")
+  owner     User      @relation("MediaOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  mimeType  String    @map("mime_type")
+  kind      MediaKind @map("kind")
+  size      Int
+  filename  String
+  data      Bytes
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([ownerId, createdAt])
+  @@map("media")
+}
