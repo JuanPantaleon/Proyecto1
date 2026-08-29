@@ -2,6 +2,10 @@
   "name": "ranked-fitness",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev --turbopack -p 3000",
     "build": "./node_modules/.bin/prisma generate && next build",
@@ -9,7 +13,8 @@
     "lint": "next lint",
     "migrate": "npx prisma migrate dev --name init",
     "db:push": "npx prisma db push",
-    "db:studio": "npx prisma studio"
+    "db:studio": "npx prisma studio",
+    "build:web-admin": "cd apps/web-admin && npm run build"
   },
   "dependencies": {
     "@clerk/nextjs": "^4.31.8",

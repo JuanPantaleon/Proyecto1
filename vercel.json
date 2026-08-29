@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd apps/web-admin && npm install && npm run build",
+  "buildCommand": "npm install && npm run build:web-admin",
   "devCommand": "cd apps/web-admin && npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
