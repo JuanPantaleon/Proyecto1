@@ -14,7 +14,7 @@ services:
     rootDir: .
     healthCheckPath: /health
     # Genera el cliente Prisma y compila el backend (webpack → apps/backend/dist/main.js).
-    buildCommand: cd apps/backend && npx prisma generate && cd ../.. && npx nx build backend
+    buildCommand: npm install && cd apps/backend && npx prisma generate && cd ../.. && npx nx build backend
     # Aplica migraciones pendientes y arranca. `prisma migrate deploy` es idempotente.
     startCommand: cd apps/backend && npx prisma migrate deploy && cd ../.. && node apps/backend/dist/main.js
     envVars:
